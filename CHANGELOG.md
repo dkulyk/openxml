@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Explicit package repair analysis and application for selected dangling or
+  invalid relationships, orphan relationship parts, and content-type issues.
 - Relationship lookup by raw or resolved target, explicit retargeting, and bulk
   removal of internal relationships to a resolved part.
 - Atomic staged part moves with content-type migration, relationship-part moves,

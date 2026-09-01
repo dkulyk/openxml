@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace DK\OpenXml\Packaging;
 
+use DK\OpenXml\Repair\PackageRepairOptions;
+use DK\OpenXml\Repair\RepairReport;
+
 interface PackageInterface
 {
     public function hasPart(string $name): bool;
@@ -30,6 +33,10 @@ interface PackageInterface
 
     /** @return list<string> */
     public function validate(): array;
+
+    public function analyzeRepairs(PackageRepairOptions $options): RepairReport;
+
+    public function applyRepairs(PackageRepairOptions $options): RepairReport;
 
     public function hasChanges(): bool;
 

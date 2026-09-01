@@ -170,6 +170,36 @@ lookup treats `media/image.png` and `/word/media/image.png` as the same target
 when both resolve from `/word/document.xml` to `/word/media/image.png`. External
 relationships are never returned or removed by resolved-part operations.
 
+## Explicit package repair
+
+Repair is opt-in and separated into analysis and application. Enable only the
+operations appropriate for the application:
+
+```php
+use DK\OpenXml\Repair\PackageRepairOptions;
+
+$options = new PackageRepairOptions(
+    removeDanglingRelationships: true,
+    removeInvalidRelationships: true,
+    removeOrphanRelationshipParts: true,
+    removeStaleContentTypeOverrides: true,
+    correctRelationshipContentTypes: true,
+);
+
+$report = $package->analyzeRepairs($options);
+foreach ($report as $action) {
+    echo $action->description, PHP_EOL;
+}
+
+$applied = $package->applyRepairs($options);
+$package->save();
+```
+
+`analyzeRepairs()` never stages changes. `applyRepairs()` returns the same typed
+actions and modifies only the categories enabled in `PackageRepairOptions`.
+Malformed relationship XML and digital signatures are reported by validation but
+are not repaired automatically because their intended meaning cannot be inferred.
+
 `movePart()` also moves the part's relationship part. It rewrites relationships
 that target the moved part and adjusts its relative outgoing targets when the
 part changes directory. Existing destination parts are never overwritten.
