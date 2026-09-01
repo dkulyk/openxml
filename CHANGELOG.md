@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- Updated GitHub Actions to `actions/checkout@v7` and moved Composer validation, PHP CS Fixer, PHPStan, and dependency auditing into a single PHP 8.1 quality job instead of repeating them across the test matrix.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added
