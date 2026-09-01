@@ -125,7 +125,9 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `getParts(): Traversable` | Iterate ordinary package parts. |
 | `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
 | `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
-| `removePart(string $name): void` | Remove a part and its relationship part. |
+| `removePart(string $name): void` | Remove an unreferenced part and its relationship part. |
+| `getInboundRelationships(string $partName): array` | Return package and part relationships targeting a part. |
+| `removePartAndRelationships(string $name): PartRemovalResult` | Explicitly remove a part and every inbound relationship. |
 | `movePart(string $source, string $destination): PartInterface` | Move a part and update relationships that depend on its name. |
 | `getRelationships(?string $sourcePartName = null): Relationships` | Read package or part relationships. |
 | `validate(): array` | Return structural issues without saving. |
@@ -203,3 +205,21 @@ are not repaired automatically because their intended meaning cannot be inferred
 `movePart()` also moves the part's relationship part. It rewrites relationships
 that target the moved part and adjusts its relative outgoing targets when the
 part changes directory. Existing destination parts are never overwritten.
+
+`removePart()` refuses to remove a referenced part and throws
+`PartInUseException`, whose references identify every relationship source and ID.
+Use the explicitly cascading operation only when removing all inbound references
+is intended:
+
+```php
+$references = $package->getInboundRelationships('/word/media/image1.png');
+
+$result = $package->removePartAndRelationships('/word/media/image1.png');
+foreach ($result->getRemovedRelationships() as $reference) {
+    echo $reference->sourcePartName ?? 'package', ': ',
+        $reference->relationship->getId(), PHP_EOL;
+}
+```
+
+Relationships to other shared resources are unchanged. Both removal methods also
+remove the deleted part's own relationship part and content-type override.

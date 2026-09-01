@@ -8,6 +8,7 @@ use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\EncryptedPackageException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageValidationException;
+use DK\OpenXml\Exception\PartInUseException;
 use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\Internal\AtomicFileWriter;
@@ -19,7 +20,9 @@ use DK\OpenXml\Packaging\PackageInterface;
 use DK\OpenXml\Packaging\Part;
 use DK\OpenXml\Packaging\PartInterface;
 use DK\OpenXml\Packaging\PartName;
+use DK\OpenXml\Packaging\PartRemovalResult;
 use DK\OpenXml\Packaging\RelationshipInterface;
+use DK\OpenXml\Packaging\RelationshipReference;
 use DK\OpenXml\Packaging\Relationships;
 use DK\OpenXml\Repair\PackageRepairOptions;
 use DK\OpenXml\Repair\RepairReport;
@@ -222,6 +225,58 @@ final class OpenXmlPackage implements PackageInterface
     public function removePart(string $name): void
     {
         $name = PartName::normalize($name);
+        if (!$this->hasPart($name)) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $name));
+        }
+
+        $references = $this->getInboundRelationships($name);
+        if ($references !== []) {
+            throw new PartInUseException($name, $references);
+        }
+
+        $this->removePartContents($name);
+    }
+
+    public function getInboundRelationships(string $partName): array
+    {
+        $partName = PartName::normalize($partName);
+        if (!$this->hasPart($partName)) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $partName));
+        }
+
+        $sourcePartNames = [];
+        foreach ($this->getParts() as $part) {
+            $sourcePartNames[] = $part->getName();
+        }
+
+        $references = [];
+        foreach ([null, ...$sourcePartNames] as $sourcePartName) {
+            foreach ($this->getRelationships($sourcePartName)->getByTargetPart($partName) as $relationship) {
+                $references[] = new RelationshipReference($sourcePartName, $relationship);
+            }
+        }
+
+        return $references;
+    }
+
+    public function removePartAndRelationships(string $name): PartRemovalResult
+    {
+        $name = PartName::normalize($name);
+        $references = $this->getInboundRelationships($name);
+
+        foreach ($references as $reference) {
+            $this->getRelationships($reference->sourcePartName)->remove(
+                $reference->relationship->getId(),
+            );
+        }
+
+        $this->removePartContents($name);
+
+        return new PartRemovalResult($name, $references);
+    }
+
+    private function removePartContents(string $name): void
+    {
         $relationshipPartName = PartName::relationshipsName($name);
 
         $this->container->remove(PartName::entry($name));
