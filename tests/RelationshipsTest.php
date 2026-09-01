@@ -1,0 +1,56 @@
+<?php
+
+declare(strict_types=1);
+
+namespace DK\OpenXml\Tests;
+
+use DK\OpenXml\Exception\OpenXmlException;
+use DK\OpenXml\Packaging\PartName;
+use DK\OpenXml\Packaging\Relationship;
+use DK\OpenXml\Packaging\Relationships;
+use PHPUnit\Framework\TestCase;
+
+final class RelationshipsTest extends TestCase
+{
+    public function testRoundTripAndLookup(): void
+    {
+        $items = new Relationships();
+        $items->add(new Relationship('rId1', 'urn:office-document', 'word/document.xml'));
+        $items->add(new Relationship('rId2', 'urn:hyperlink', 'https://example.com', true));
+        $copy = Relationships::fromXml($items->toXml());
+        self::assertCount(2, $copy);
+        self::assertSame('word/document.xml', $copy->firstByType('urn:office-document')?->getTarget());
+        self::assertTrue($copy->get('rId2')->isExternal());
+    }
+
+    public function testGeneratedIdsFillFirstGap(): void
+    {
+        $items = new Relationships();
+        $items->create('urn:a', 'a.xml', false, 'rId1');
+        $items->create('urn:c', 'c.xml', false, 'rId3');
+        self::assertSame('rId2', $items->create('urn:b', 'b.xml')->getId());
+    }
+
+    public function testDuplicateIdIsRejected(): void
+    {
+        $items = new Relationships();
+        $items->create('urn:a', 'a.xml', false, 'rId1');
+        $this->expectException(OpenXmlException::class);
+        $items->create('urn:b', 'b.xml', false, 'rId1');
+    }
+
+    /** @dataProvider targetProvider */
+    public function testTargetResolution(?string $source, string $target, string $expected): void
+    {
+        self::assertSame($expected, PartName::resolveTarget($source, $target));
+    }
+
+    /** @return iterable<string, array{?string, string, string}> */
+    public static function targetProvider(): iterable
+    {
+        yield 'package target' => [null, 'word/document.xml', '/word/document.xml'];
+        yield 'sibling target' => ['/word/document.xml', 'styles.xml', '/word/styles.xml'];
+        yield 'parent target' => ['/word/header/header1.xml', '../media/image.png', '/word/media/image.png'];
+        yield 'absolute target' => ['/word/document.xml', '/docProps/core.xml', '/docProps/core.xml'];
+    }
+}

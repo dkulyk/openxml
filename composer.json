@@ -1,0 +1,46 @@
+{
+    "name": "dkulyk/openxml",
+    "description": "OPC packaging for Open XML documents",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "ext-dom": "*",
+        "ext-zip": "*"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.88",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "DK\\OpenXml\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "DK\\OpenXml\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --no-progress --debug --memory-limit=512M",
+        "format": "php-cs-fixer fix --sequential --allow-unsupported-php-version=yes --verbose",
+        "check-style": "php-cs-fixer fix --sequential --allow-unsupported-php-version=yes --dry-run --diff --verbose",
+        "check": [
+            "@validate-composer",
+            "@check-style",
+            "@analyse",
+            "@test"
+        ],
+        "validate-composer": "composer validate --strict"
+    },
+    "config": {
+        "platform": {
+            "php": "8.1.0"
+        },
+        "sort-packages": true
+    }
+}
