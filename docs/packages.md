@@ -133,6 +133,10 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `save(): void` | Atomically replace the opened source. |
 | `saveAs(string $filename): void` | Atomically write to another path. |
 
+`validate()` reports missing relationship targets, invalid internal targets,
+orphan relationship parts, missing or stale content-type declarations, incorrect
+relationship content types, and unsupported digital-signature preservation.
+
 ### `PartInterface`
 
 | Method | Description |

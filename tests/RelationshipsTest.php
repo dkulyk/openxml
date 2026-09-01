@@ -18,6 +18,15 @@ final class RelationshipsTest extends TestCase
         self::assertSame('/_rels/document.xml.rels', PartName::relationshipsName('/document.xml'));
         self::assertSame('/word/media/image.png', PartName::resolveTarget('/word/document.xml', 'media/image.png'));
         self::assertSame('/styles.xml', PartName::resolveTarget('/document.xml', 'styles.xml'));
+        self::assertNull(PartName::relationshipSourceName('/_rels/.rels'));
+        self::assertSame('/word/document.xml', PartName::relationshipSourceName('/word/_rels/document.xml.rels'));
+        self::assertSame('/document.xml', PartName::relationshipSourceName('/_rels/document.xml.rels'));
+    }
+
+    public function testRelationshipSourceRejectsAnOrdinaryPart(): void
+    {
+        $this->expectException(OpenXmlException::class);
+        PartName::relationshipSourceName('/word/document.xml');
     }
 
     public function testRoundTripAndLookup(): void
