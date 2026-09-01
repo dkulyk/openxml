@@ -18,6 +18,7 @@ use DK\OpenXml\Packaging\PartInterface;
 use DK\OpenXml\Packaging\PartName;
 use DK\OpenXml\Packaging\RelationshipInterface;
 use DK\OpenXml\Packaging\Relationships;
+use DK\OpenXml\Security\PackageLimits;
 
 final class OpenXmlPackage implements PackageInterface
 {
@@ -27,27 +28,37 @@ final class OpenXmlPackage implements PackageInterface
         private ?string $sourceFilename = null,
         private ?string $sourceFingerprint = null,
         private bool $changed = false,
+        private PackageLimits $limits = new PackageLimits(),
     ) {}
 
-    public static function create(): self
+    public static function create(?PackageLimits $limits = null): self
     {
+        $limits ??= new PackageLimits();
         $contentTypes = new ContentTypes();
         $contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
 
-        return new self(new ZipContainer(), $contentTypes);
+        return new self(
+            new ZipContainer($limits),
+            $contentTypes,
+            limits: $limits,
+        );
     }
 
-    public static function open(string $filename): self
+    public static function open(string $filename, ?PackageLimits $limits = null): self
     {
+        $limits ??= new PackageLimits();
         $sourceFilename = self::resolveExistingFilename($filename);
         $fingerprintBeforeReading = self::fingerprint($sourceFilename);
-        $container = ZipContainer::open($sourceFilename);
+        $container = ZipContainer::open($sourceFilename, $limits);
 
         if (!$container->has('[Content_Types].xml')) {
             throw new OpenXmlException('Package has no [Content_Types].xml.');
         }
 
-        $contentTypes = ContentTypes::fromXml($container->read('[Content_Types].xml'));
+        $contentTypes = ContentTypes::fromXml(
+            $container->read('[Content_Types].xml'),
+            $limits->maximumXmlBytes,
+        );
         $fingerprintAfterReading = self::fingerprint($sourceFilename);
 
         if (!hash_equals($fingerprintBeforeReading, $fingerprintAfterReading)) {
@@ -62,6 +73,7 @@ final class OpenXmlPackage implements PackageInterface
             $contentTypes,
             $sourceFilename,
             $fingerprintAfterReading,
+            limits: $limits,
         );
     }
 
@@ -70,9 +82,12 @@ final class OpenXmlPackage implements PackageInterface
      *
      * @param callable(self): void $edit
      */
-    public static function edit(string $filename, callable $edit): void
-    {
-        $package = self::open($filename);
+    public static function edit(
+        string $filename,
+        callable $edit,
+        ?PackageLimits $limits = null,
+    ): void {
+        $package = self::open($filename, $limits);
         $edit($package);
         $package->save();
     }
@@ -173,6 +188,7 @@ final class OpenXmlPackage implements PackageInterface
             $this,
             $sourcePartName,
             $onChange,
+            $this->limits->maximumXmlBytes,
         );
     }
 
@@ -198,6 +214,11 @@ final class OpenXmlPackage implements PackageInterface
     public function validate(): array
     {
         $issues = [];
+
+        if ($this->hasDigitalSignatures()) {
+            $issues[] = 'Digitally signed packages cannot be saved because signature preservation is not supported.';
+        }
+
         $partNames = $this->collectPartNames($issues);
 
         foreach ([null, ...$partNames] as $sourcePartName) {
@@ -222,6 +243,17 @@ final class OpenXmlPackage implements PackageInterface
         return $issues;
     }
 
+    private function hasDigitalSignatures(): bool
+    {
+        foreach ($this->container->entries() as $entryName) {
+            if (str_starts_with(strtolower($entryName), '_xmlsignatures/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function hasChanges(): bool
     {
         return $this->changed;
@@ -230,8 +262,8 @@ final class OpenXmlPackage implements PackageInterface
     public function discardChanges(): void
     {
         $freshPackage = $this->sourceFilename === null
-            ? self::create()
-            : self::open($this->sourceFilename);
+            ? self::create($this->limits)
+            : self::open($this->sourceFilename, $this->limits);
 
         $this->container = $freshPackage->container;
         $this->contentTypes = $freshPackage->contentTypes;
@@ -347,12 +379,15 @@ final class OpenXmlPackage implements PackageInterface
 
     private function verifyWrittenPackage(string $filename): void
     {
-        $container = ZipContainer::open($filename);
+        $container = ZipContainer::open($filename, $this->limits);
         if (!$container->has('[Content_Types].xml')) {
             throw new OpenXmlException('Written package has no [Content_Types].xml.');
         }
 
-        ContentTypes::fromXml($container->read('[Content_Types].xml'));
+        ContentTypes::fromXml(
+            $container->read('[Content_Types].xml'),
+            $this->limits->maximumXmlBytes,
+        );
     }
 
     private static function resolveExistingFilename(string $filename): string

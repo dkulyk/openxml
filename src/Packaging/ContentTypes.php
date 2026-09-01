@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DK\OpenXml\Packaging;
 
 use DK\OpenXml\Exception\OpenXmlException;
+use DK\OpenXml\Internal\XmlDocument;
 
 final class ContentTypes
 {
@@ -16,23 +17,40 @@ final class ContentTypes
     /** @var array<string, string> */
     private array $overrides = [];
 
-    public static function fromXml(string $xml): self
-    {
-        $document = new \DOMDocument();
-        if (!@$document->loadXML($xml, LIBXML_NONET)) {
-            throw new OpenXmlException('Invalid [Content_Types].xml.');
-        }
+    public static function fromXml(
+        string $xml,
+        int $maximumXmlBytes = XmlDocument::DEFAULT_MAXIMUM_BYTES,
+    ): self {
+        $document = XmlDocument::load(
+            $xml,
+            'Types',
+            self::XML_NAMESPACE,
+            $maximumXmlBytes,
+        );
 
         $types = new self();
+        $seenDefaults = [];
         foreach ($document->getElementsByTagNameNS(self::XML_NAMESPACE, 'Default') as $node) {
+            $extension = strtolower($node->getAttribute('Extension'));
+            if (isset($seenDefaults[$extension])) {
+                throw new OpenXmlException(sprintf('Duplicate content type default for "%s".', $extension));
+            }
+            $seenDefaults[$extension] = true;
             $types->setDefault(
-                $node->getAttribute('Extension'),
+                $extension,
                 $node->getAttribute('ContentType'),
             );
         }
+
+        $seenOverrides = [];
         foreach ($document->getElementsByTagNameNS(self::XML_NAMESPACE, 'Override') as $node) {
+            $partName = PartName::normalize($node->getAttribute('PartName'));
+            if (isset($seenOverrides[$partName])) {
+                throw new OpenXmlException(sprintf('Duplicate content type override for "%s".', $partName));
+            }
+            $seenOverrides[$partName] = true;
             $types->setOverride(
-                $node->getAttribute('PartName'),
+                $partName,
                 $node->getAttribute('ContentType'),
             );
         }

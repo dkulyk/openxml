@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DK\OpenXml\Packaging;
 
 use DK\OpenXml\Exception\OpenXmlException;
+use DK\OpenXml\Internal\XmlDocument;
 use DK\OpenXml\OpenXmlPackage;
 
 /** @implements \IteratorAggregate<string, RelationshipInterface> */
@@ -34,21 +35,29 @@ final class Relationships implements \IteratorAggregate, \Countable
         ?OpenXmlPackage $package = null,
         ?string $sourcePartName = null,
         ?\Closure $onChange = null,
+        int $maximumXmlBytes = XmlDocument::DEFAULT_MAXIMUM_BYTES,
     ): self {
-        $document = new \DOMDocument();
-        if (!@$document->loadXML($xml, LIBXML_NONET)) {
-            throw new OpenXmlException('Invalid relationships part.');
-        }
+        $document = XmlDocument::load(
+            $xml,
+            'Relationships',
+            self::XML_NAMESPACE,
+            $maximumXmlBytes,
+        );
 
         $collection = new self($package, $sourcePartName);
         $nodes = $document->getElementsByTagNameNS(self::XML_NAMESPACE, 'Relationship');
 
         foreach ($nodes as $node) {
+            $targetMode = $node->getAttribute('TargetMode');
+            if ($targetMode !== '' && strcasecmp($targetMode, 'External') !== 0) {
+                throw new OpenXmlException(sprintf('Invalid relationship TargetMode "%s".', $targetMode));
+            }
+
             $collection->add(new Relationship(
                 $node->getAttribute('Id'),
                 $node->getAttribute('Type'),
                 $node->getAttribute('Target'),
-                strcasecmp($node->getAttribute('TargetMode'), 'External') === 0,
+                strcasecmp($targetMode, 'External') === 0,
                 $package,
                 $sourcePartName,
             ));

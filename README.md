@@ -95,6 +95,34 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 });
 ```
 
+## Resource limits and untrusted packages
+
+Packages are checked before ZIP entries are loaded into memory. The defaults limit entry count, individual and total expanded sizes, compression ratio, and parsed XML size. Applications can provide stricter limits:
+
+```php
+use DK\OpenXml\Security\PackageLimits;
+
+$limits = new PackageLimits(
+    maximumEntries: 2_000,
+    maximumPartBytes: 32 * 1024 * 1024,
+    maximumPackageBytes: 256 * 1024 * 1024,
+    maximumCompressionRatio: 200.0,
+    maximumXmlBytes: 8 * 1024 * 1024,
+);
+
+$package = OpenXmlPackage::open('upload.docx', $limits);
+```
+
+Unsafe or duplicate ZIP entry names, DTD declarations, unexpected OPC XML roots, and suspicious compression ratios are rejected. Limits reduce resource-exhaustion risk but should still be selected for the application's workload and deployment memory budget.
+
+## Current limitations
+
+- Parts are currently held in memory; lazy streams and copy-through writes are not implemented yet.
+- Encrypted Office documents are not supported because they are not regular readable OPC ZIP packages.
+- Digitally signed packages can be opened for inspection, but saving them is blocked because signatures cannot currently be preserved.
+- Atomic replacement depends on the destination filesystem supporting same-directory rename. If replacement is unavailable, saving fails and leaves the original file untouched.
+- Validation covers OPC structure and known integrity rules; it does not validate WordprocessingML, SpreadsheetML, or PresentationML schemas.
+
 ## Architecture
 
 ```text

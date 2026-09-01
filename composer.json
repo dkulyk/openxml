@@ -1,6 +1,15 @@
 {
     "name": "dkulyk/openxml",
     "description": "OPC packaging for Open XML documents",
+    "keywords": [
+        "docx",
+        "office-open-xml",
+        "openxml",
+        "opc",
+        "pptx",
+        "xlsx"
+    ],
+    "homepage": "https://github.com/dkulyk/openxml",
     "type": "library",
     "license": "MIT",
     "require": {
@@ -23,6 +32,10 @@
         "psr-4": {
             "DK\\OpenXml\\Tests\\": "tests/"
         }
+    },
+    "support": {
+        "issues": "https://github.com/dkulyk/openxml/issues",
+        "source": "https://github.com/dkulyk/openxml"
     },
     "scripts": {
         "test": "phpunit",
