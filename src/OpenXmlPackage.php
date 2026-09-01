@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace DK\OpenXml;
 
 use DK\OpenXml\Exception\ConcurrentModificationException;
+use DK\OpenXml\Exception\EncryptedPackageException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageValidationException;
 use DK\OpenXml\Exception\PartNotFoundException;
+use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Container\ContainerInterface;
 use DK\OpenXml\Internal\Container\ZipContainer;
@@ -48,6 +50,26 @@ final class OpenXmlPackage implements PackageInterface
     {
         $limits ??= new PackageLimits();
         $sourceFilename = self::resolveExistingFilename($filename);
+        $format = OfficeFileDetector::detect($sourceFilename);
+
+        if ($format === OfficeFileFormat::EncryptedOpcPackage) {
+            throw new EncryptedPackageException(
+                'This is an encrypted Office Open XML package. Open it through the encryption API before reading it as OPC.',
+            );
+        }
+
+        if ($format === OfficeFileFormat::CompoundFile) {
+            throw new UnsupportedFileFormatException(
+                'This is a valid CFBF/OLE file, but it is not an encrypted Office Open XML package.',
+            );
+        }
+
+        if ($format === OfficeFileFormat::Unknown) {
+            throw new UnsupportedFileFormatException(
+                'The file is neither a recognized OPC ZIP package nor a supported Office compound file.',
+            );
+        }
+
         $fingerprintBeforeReading = self::fingerprint($sourceFilename);
         $container = ZipContainer::open($sourceFilename, $limits);
 

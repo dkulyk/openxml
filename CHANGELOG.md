@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added
+
+- File-signature detection for OPC ZIP, CFBF/OLE, encrypted Office Open XML, and unknown files.
+- Explicit exceptions for missing optional CFBF support, malformed compound files, incomplete encryption streams, encrypted packages, and unsupported formats.
+- Optional `dkulyk/compound-file` integration, tested against its 0.2 writer API.
+
+### Changed
+
+- `OpenXmlPackage::open()` now identifies the outer container before invoking ZIP handling.
+
 ## [0.1.0] - 2026-09-01
 
 ### Added

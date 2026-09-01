@@ -18,6 +18,7 @@
         "ext-zip": "*"
     },
     "require-dev": {
+        "dkulyk/compound-file": "^0.2.0",
         "friendsofphp/php-cs-fixer": "^3.88",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-strict-rules": "^2.0",
@@ -36,6 +37,9 @@
     "support": {
         "issues": "https://github.com/dkulyk/openxml/issues",
         "source": "https://github.com/dkulyk/openxml"
+    },
+    "suggest": {
+        "dkulyk/compound-file": "Required to inspect CFBF containers and recognize encrypted Office Open XML files."
     },
     "scripts": {
         "test": "phpunit",

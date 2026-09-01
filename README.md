@@ -10,6 +10,36 @@ It intentionally owns OPC concepts while keeping ZIP behind an internal boundary
 composer require dkulyk/openxml
 ```
 
+Encrypted Office files use a CFBF container instead of a directly readable ZIP.
+Install the optional compound-file reader when your application needs to recognize
+them:
+
+```shell
+composer require dkulyk/compound-file
+```
+
+## Detecting the file format
+
+`OpenXmlPackage::open()` checks the container before invoking ZIP handling. CFBF,
+encrypted Office, malformed encrypted containers, unknown files, and ordinary OPC
+ZIP packages therefore produce distinct results or exceptions.
+
+```php
+use DK\OpenXml\OfficeFileDetector;
+use DK\OpenXml\OfficeFileFormat;
+
+$format = OfficeFileDetector::detect('document.docx');
+
+if ($format === OfficeFileFormat::EncryptedOpcPackage) {
+    // Route the file to an encryption-aware reader.
+}
+```
+
+For a CFBF signature, detection requires `dkulyk/compound-file`. Without it,
+`MissingDependencyException` includes the installation command. A CFBF containing
+both `EncryptionInfo` and `EncryptedPackage` is recognized as encrypted OOXML;
+missing or structurally invalid encryption streams are rejected explicitly.
+
 ## Reading and navigating a package
 
 ```php
@@ -118,7 +148,7 @@ Unsafe or duplicate ZIP entry names, DTD declarations, unexpected OPC XML roots,
 ## Current limitations
 
 - Parts are currently held in memory; lazy streams and copy-through writes are not implemented yet.
-- Encrypted Office documents are not supported because they are not regular readable OPC ZIP packages.
+- Encrypted Office documents are detected but must be routed to an encryption-aware reader before they can be opened as OPC.
 - Digitally signed packages can be opened for inspection, but saving them is blocked because signatures cannot currently be preserved.
 - Atomic replacement depends on the destination filesystem supporting same-directory rename. If replacement is unavailable, saving fails and leaves the original file untouched.
 - Validation covers OPC structure and known integrity rules; it does not validate WordprocessingML, SpreadsheetML, or PresentationML schemas.
