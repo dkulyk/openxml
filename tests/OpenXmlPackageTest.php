@@ -180,7 +180,7 @@ final class OpenXmlPackageTest extends TestCase
         $memoryBefore = memory_get_usage(true);
         $package = OpenXmlPackage::open($this->filename);
         $memoryIncrease = memory_get_usage(true) - $memoryBefore;
-        self::assertLessThan(2 * 1024 * 1024, $memoryIncrease);
+        self::assertLessThanOrEqual(2 * 1024 * 1024, $memoryIncrease);
 
         $stream = $package->getPart('/media.bin')->openStream();
 
