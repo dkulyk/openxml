@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
-- CI cancellation now groups repeated pull-request runs by pull-request number.
+- CI cancellation now groups repeated pull-request runs by pull-request number, and feature branches no longer create duplicate push and pull-request runs.
 
 ### Fixed
 
