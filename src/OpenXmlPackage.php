@@ -13,6 +13,7 @@ use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Container\ContainerInterface;
 use DK\OpenXml\Internal\Container\ZipContainer;
+use DK\OpenXml\Internal\PackageRepairer;
 use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PackageInterface;
 use DK\OpenXml\Packaging\Part;
@@ -20,6 +21,8 @@ use DK\OpenXml\Packaging\PartInterface;
 use DK\OpenXml\Packaging\PartName;
 use DK\OpenXml\Packaging\RelationshipInterface;
 use DK\OpenXml\Packaging\Relationships;
+use DK\OpenXml\Repair\PackageRepairOptions;
+use DK\OpenXml\Repair\RepairReport;
 use DK\OpenXml\Security\PackageLimits;
 
 final class OpenXmlPackage implements PackageInterface
@@ -385,6 +388,16 @@ final class OpenXmlPackage implements PackageInterface
         return $issues;
     }
 
+    public function analyzeRepairs(PackageRepairOptions $options): RepairReport
+    {
+        return $this->packageRepairer()->run($options, false);
+    }
+
+    public function applyRepairs(PackageRepairOptions $options): RepairReport
+    {
+        return $this->packageRepairer()->run($options, true);
+    }
+
     private function hasDigitalSignatures(): bool
     {
         foreach ($this->container->entries() as $entryName) {
@@ -394,6 +407,18 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         return false;
+    }
+
+    private function packageRepairer(): PackageRepairer
+    {
+        return new PackageRepairer(
+            $this->container,
+            $this->contentTypes,
+            fn(?string $sourcePartName): Relationships => $this->getRelationships($sourcePartName),
+            function (): void {
+                $this->changed = true;
+            },
+        );
     }
 
     public function hasChanges(): bool
