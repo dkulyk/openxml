@@ -270,7 +270,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->contentTypes->setOverride($destination, $contentType);
 
         foreach ($relationshipChanges as [$relationshipSource, $id, $target]) {
-            $this->getRelationships($relationshipSource)->replaceTarget($id, $target);
+            $this->getRelationships($relationshipSource)->retarget($id, $target);
         }
 
         $this->changed = true;

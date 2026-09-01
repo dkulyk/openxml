@@ -51,15 +51,54 @@ final class RelationshipsTest extends TestCase
         self::assertSame('rId2', $items->create('urn:b', 'b.xml')->getId());
     }
 
-    public function testRelationshipTargetCanBeReplaced(): void
+    public function testRelationshipCanBeRetargeted(): void
     {
         $items = new Relationships();
         $items->create('urn:a', 'old.xml', false, 'rId1');
 
-        $replacement = $items->replaceTarget('rId1', 'new.xml');
+        $replacement = $items->retarget('rId1', 'new.xml');
 
         self::assertSame('new.xml', $replacement->getTarget());
         self::assertSame('new.xml', $items->get('rId1')->getTarget());
+    }
+
+    public function testRelationshipsCanBeFoundByRawAndResolvedTarget(): void
+    {
+        $items = new Relationships(sourcePartName: '/word/document.xml');
+        $items->create('urn:image', 'media/image.png', false, 'rId1');
+        $items->create('urn:image', '/word/media/image.png', false, 'rId2');
+        $items->create('urn:link', 'https://example.com', true, 'rId3');
+
+        self::assertSame('rId1', $items->firstByTarget('media/image.png')?->getId());
+        self::assertCount(1, $items->getByTarget('/word/media/image.png'));
+        self::assertCount(2, $items->getByTargetPart('/word/media/image.png'));
+        self::assertSame([], $items->getByTargetPart('/example.com'));
+    }
+
+    public function testRelationshipsToResolvedPartCanBeRemovedTogether(): void
+    {
+        $items = new Relationships(sourcePartName: '/word/document.xml');
+        $items->create('urn:image', 'media/image.png', false, 'rId1');
+        $items->create('urn:image', '/word/media/image.png', false, 'rId2');
+        $items->create('urn:other', 'styles.xml', false, 'rId3');
+
+        self::assertSame(2, $items->removeByTargetPart('/word/media/image.png'));
+        self::assertCount(1, $items);
+        self::assertSame('rId3', $items->get('rId3')->getId());
+        self::assertSame(0, $items->removeByTargetPart('/word/media/image.png'));
+    }
+
+    public function testRetargetRejectsInvalidInternalTargetWithoutChangingRelationship(): void
+    {
+        $items = new Relationships(sourcePartName: '/word/document.xml');
+        $items->create('urn:a', 'old.xml', false, 'rId1');
+
+        try {
+            $items->retarget('rId1', '../../outside.xml');
+            self::fail('An invalid internal target was expected to fail.');
+        } catch (OpenXmlException) {
+            self::assertSame('old.xml', $items->get('rId1')->getTarget());
+        }
     }
 
     public function testDuplicateIdIsRejected(): void

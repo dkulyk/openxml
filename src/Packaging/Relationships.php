@@ -131,6 +131,41 @@ final class Relationships implements \IteratorAggregate, \Countable
         return array_values($matching);
     }
 
+    public function firstByTarget(string $target): ?RelationshipInterface
+    {
+        foreach ($this->relationships as $relationship) {
+            if ($relationship->getTarget() === $target) {
+                return $relationship;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return list<RelationshipInterface> */
+    public function getByTarget(string $target): array
+    {
+        $matching = array_filter(
+            $this->relationships,
+            static fn(RelationshipInterface $relationship): bool => $relationship->getTarget() === $target,
+        );
+
+        return array_values($matching);
+    }
+
+    /** @return list<RelationshipInterface> */
+    public function getByTargetPart(string $partName): array
+    {
+        $partName = PartName::normalize($partName);
+        $matching = array_filter(
+            $this->relationships,
+            static fn(RelationshipInterface $relationship): bool => !$relationship->isExternal()
+                && $relationship->getTargetPartName() === $partName,
+        );
+
+        return array_values($matching);
+    }
+
     public function remove(string $id): void
     {
         if (!isset($this->relationships[$id])) {
@@ -141,9 +176,16 @@ final class Relationships implements \IteratorAggregate, \Countable
         $this->notifyChanged();
     }
 
-    public function replaceTarget(string $id, string $target): RelationshipInterface
+    public function retarget(string $id, string $target): RelationshipInterface
     {
         $current = $this->get($id);
+        if ($target === '') {
+            throw new OpenXmlException('Relationship target must not be empty.');
+        }
+        if (!$current->isExternal()) {
+            PartName::resolveTarget($this->sourcePartName, $target);
+        }
+
         $replacement = new Relationship(
             $current->getId(),
             $current->getType(),
@@ -153,14 +195,24 @@ final class Relationships implements \IteratorAggregate, \Countable
             $this->sourcePartName,
         );
 
-        if ($target === '') {
-            throw new OpenXmlException('Relationship target must not be empty.');
-        }
-
         $this->relationships[$id] = $replacement;
         $this->notifyChanged();
 
         return $replacement;
+    }
+
+    public function removeByTargetPart(string $partName): int
+    {
+        $matching = $this->getByTargetPart($partName);
+        foreach ($matching as $relationship) {
+            unset($this->relationships[$relationship->getId()]);
+        }
+
+        if ($matching !== []) {
+            $this->notifyChanged();
+        }
+
+        return count($matching);
     }
 
     public function getIterator(): \Traversable
