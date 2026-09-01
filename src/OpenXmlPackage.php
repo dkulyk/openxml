@@ -286,12 +286,39 @@ final class OpenXmlPackage implements PackageInterface
         $partNames = $this->collectPartNames($issues);
 
         foreach ([null, ...$partNames] as $sourcePartName) {
-            foreach ($this->getRelationships($sourcePartName) as $relationship) {
+            try {
+                $relationships = $this->getRelationships($sourcePartName);
+            } catch (OpenXmlException $exception) {
+                $sourceDescription = $sourcePartName ?? 'the package';
+                $issues[] = sprintf(
+                    'Relationship part for %s is invalid: %s',
+                    $sourceDescription,
+                    $exception->getMessage(),
+                );
+
+                continue;
+            }
+
+            foreach ($relationships as $relationship) {
                 if ($relationship->isExternal()) {
                     continue;
                 }
 
-                $targetPartName = (string) $relationship->getTargetPartName();
+                try {
+                    $targetPartName = (string) $relationship->getTargetPartName();
+                } catch (OpenXmlException $exception) {
+                    $sourceDescription = $sourcePartName ?? 'the package';
+                    $issues[] = sprintf(
+                        'Relationship "%s" from %s has an invalid internal target "%s": %s',
+                        $relationship->getId(),
+                        $sourceDescription,
+                        $relationship->getTarget(),
+                        $exception->getMessage(),
+                    );
+
+                    continue;
+                }
+
                 if (!$this->hasPart($targetPartName)) {
                     $sourceDescription = $sourcePartName ?? 'the package';
                     $issues[] = sprintf(
@@ -372,15 +399,45 @@ final class OpenXmlPackage implements PackageInterface
         $partNames = [];
 
         foreach ($this->container->entries() as $entryName) {
-            if ($entryName === '[Content_Types].xml' || PartName::isRelationshipsPart('/' . $entryName)) {
+            if ($entryName === '[Content_Types].xml') {
                 continue;
             }
 
             $partName = '/' . $entryName;
+            if (PartName::isRelationshipsPart($partName)) {
+                if ($this->contentTypes->getForPart($partName) !== Relationships::CONTENT_TYPE) {
+                    $issues[] = sprintf(
+                        'Relationship part "%s" does not use content type "%s".',
+                        $partName,
+                        Relationships::CONTENT_TYPE,
+                    );
+                }
+
+                $sourcePartName = PartName::relationshipSourceName($partName);
+                if ($sourcePartName !== null && !$this->hasPart($sourcePartName)) {
+                    $issues[] = sprintf(
+                        'Relationship part "%s" belongs to missing source part "%s".',
+                        $partName,
+                        $sourcePartName,
+                    );
+                }
+
+                continue;
+            }
+
             $partNames[] = $partName;
 
             if ($this->contentTypes->getForPart($partName) === null) {
                 $issues[] = sprintf('Part "%s" has no registered content type.', $partName);
+            }
+        }
+
+        foreach ($this->contentTypes->getOverrides() as $partName => $contentType) {
+            if (!$this->hasPart($partName)) {
+                $issues[] = sprintf(
+                    'Content type override for "%s" has no matching part.',
+                    $partName,
+                );
             }
         }
 

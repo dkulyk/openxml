@@ -224,6 +224,67 @@ final class OpenXmlPackageTest extends TestCase
         self::assertStringContainsString('/missing.xml', $package->validate()[0]);
     }
 
+    public function testValidationReportsOrphanRelationshipPart(): void
+    {
+        $this->writeRawPackage([
+            '[Content_Types].xml' => self::contentTypesXml(
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+            ),
+            'word/_rels/missing.xml.rels' => self::relationshipsXml(),
+        ]);
+
+        $issues = OpenXmlPackage::open($this->filename)->validate();
+
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('missing source part "/word/missing.xml"', $issues[0]);
+    }
+
+    public function testValidationReportsStaleContentTypeOverride(): void
+    {
+        $this->writeRawPackage([
+            '[Content_Types].xml' => self::contentTypesXml(
+                '<Override PartName="/missing.xml" ContentType="application/xml"/>',
+            ),
+        ]);
+
+        $issues = OpenXmlPackage::open($this->filename)->validate();
+
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('override for "/missing.xml" has no matching part', $issues[0]);
+    }
+
+    public function testValidationReportsWrongRelationshipContentType(): void
+    {
+        $this->writeRawPackage([
+            '[Content_Types].xml' => self::contentTypesXml(
+                '<Default Extension="rels" ContentType="application/xml"/>',
+            ),
+            '_rels/.rels' => self::relationshipsXml(),
+        ]);
+
+        $issues = OpenXmlPackage::open($this->filename)->validate();
+
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('does not use content type', $issues[0]);
+    }
+
+    public function testValidationReportsInvalidInternalRelationshipTarget(): void
+    {
+        $this->writeRawPackage([
+            '[Content_Types].xml' => self::contentTypesXml(
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+            ),
+            '_rels/.rels' => self::relationshipsXml(
+                '<Relationship Id="rId1" Type="urn:test" Target="../outside.xml"/>',
+            ),
+        ]);
+
+        $issues = OpenXmlPackage::open($this->filename)->validate();
+
+        self::assertCount(1, $issues);
+        self::assertStringContainsString('invalid internal target "../outside.xml"', $issues[0]);
+    }
+
     public function testRelationshipPartsCannotBeAddedAsOrdinaryParts(): void
     {
         $this->expectException(OpenXmlException::class);
@@ -365,6 +426,33 @@ final class OpenXmlPackageTest extends TestCase
         $package->saveAs($this->filename);
 
         return $package;
+    }
+
+    /** @param array<string, string> $entries */
+    private function writeRawPackage(array $entries): void
+    {
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename, \ZipArchive::OVERWRITE));
+        foreach ($entries as $name => $contents) {
+            self::assertTrue($archive->addFromString($name, $contents));
+        }
+        self::assertTrue($archive->close());
+    }
+
+    private static function contentTypesXml(string $children): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            . $children
+            . '</Types>';
+    }
+
+    private static function relationshipsXml(string $children = ''): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . $children
+            . '</Relationships>';
     }
 
     /** @return array{crc: int, comp_size: int, comp_method: int} */

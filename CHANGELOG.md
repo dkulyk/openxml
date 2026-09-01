@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- OPC consistency checks for orphan relationship parts, stale content-type
+  overrides, incorrect relationship content types, and invalid internal targets.
 - Windows compatibility coverage and weekly, manually dispatchable LibreOffice interoperability and package benchmark workflows.
 - A reproducible lazy-open, streamed-extraction, and ZIP copy-through benchmark.
 - Pull-request, performance-reporting, stream-lifecycle, and compatibility-testing documentation.

@@ -62,6 +62,20 @@ final class PartName
         return $name === '/_rels/.rels' || (bool) preg_match('~/_rels/[^/]+\.rels$~', $name);
     }
 
+    public static function relationshipSourceName(string $name): ?string
+    {
+        $name = self::normalize($name);
+        if ($name === '/_rels/.rels') {
+            return null;
+        }
+
+        if (preg_match('~^(.*)/_rels/([^/]+)\.rels$~', $name, $matches) !== 1) {
+            throw new OpenXmlException(sprintf('Part is not an OPC relationship part: "%s".', $name));
+        }
+
+        return self::normalize(($matches[1] === '' ? '' : $matches[1]) . '/' . $matches[2]);
+    }
+
     public static function resolveTarget(?string $sourcePartName, string $target): string
     {
         if ($target === '' || str_contains($target, '#') || str_contains($target, '?')) {

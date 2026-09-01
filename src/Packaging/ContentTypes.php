@@ -94,6 +94,12 @@ final class ContentTypes
         unset($this->overrides[PartName::normalize($name)]);
     }
 
+    /** @return array<string, string> */
+    public function getOverrides(): array
+    {
+        return $this->overrides;
+    }
+
     public function toXml(): string
     {
         $document = new \DOMDocument('1.0', 'UTF-8');
