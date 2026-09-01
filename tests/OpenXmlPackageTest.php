@@ -8,6 +8,7 @@ use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Exception\PackageValidationException;
+use DK\OpenXml\Exception\PartInUseException;
 use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\OpenXmlPackage;
 use DK\OpenXml\Packaging\RelationshipType;
@@ -226,6 +227,72 @@ final class OpenXmlPackageTest extends TestCase
         self::assertFalse($package->hasPart('/word/document.xml'));
         $this->expectException(PartNotFoundException::class);
         $package->getRelationships('/word/document.xml');
+    }
+
+    public function testRemovingReferencedPartIsRejectedWithoutChanges(): void
+    {
+        $package = OpenXmlPackage::create();
+        $document = $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $package->addPart('/word/media/image.png', 'image/png', 'image');
+        $package->addRelationship('urn:document', 'word/document.xml', id: 'rId1');
+        $document->addRelationship('urn:image', 'media/image.png', id: 'rId1');
+
+        try {
+            $package->removePart('/word/media/image.png');
+            self::fail('Removing a referenced part was expected to fail.');
+        } catch (PartInUseException $exception) {
+            self::assertSame('/word/media/image.png', $exception->partName);
+            self::assertCount(1, $exception->getReferences());
+            self::assertSame('/word/document.xml', $exception->getReferences()[0]->sourcePartName);
+            self::assertSame('rId1', $exception->getReferences()[0]->relationship->getId());
+        }
+
+        self::assertTrue($package->hasPart('/word/media/image.png'));
+        self::assertCount(1, $document->getRelationships());
+    }
+
+    public function testPartAndInboundRelationshipsCanBeExplicitlyRemoved(): void
+    {
+        $package = OpenXmlPackage::create();
+        $document = $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $header = $package->addPart('/word/header.xml', 'application/xml', '<header/>');
+        $image = $package->addPart('/word/media/image.png', 'image/png', 'image');
+        $package->addRelationship('urn:image', 'word/media/image.png', id: 'rId1');
+        $document->addRelationship('urn:image', 'media/image.png', id: 'rId1');
+        $header->addRelationship('urn:image', 'media/image.png', id: 'rId1');
+        $image->addRelationship('urn:self', 'image.png', id: 'rId1');
+
+        $references = $package->getInboundRelationships('/word/media/image.png');
+        self::assertCount(4, $references);
+
+        $result = $package->removePartAndRelationships('/word/media/image.png');
+
+        self::assertSame('/word/media/image.png', $result->partName);
+        self::assertCount(4, $result->getRemovedRelationships());
+        self::assertFalse($package->hasPart('/word/media/image.png'));
+        self::assertCount(0, $package->getRelationships());
+        self::assertCount(0, $document->getRelationships());
+        self::assertCount(0, $header->getRelationships());
+        self::assertSame([], $package->validate());
+
+        $package->saveAs($this->filename);
+        self::assertSame([], OpenXmlPackage::open($this->filename)->validate());
+    }
+
+    public function testRemovingOneSharedResourceDoesNotAffectRelationshipsToAnother(): void
+    {
+        $package = OpenXmlPackage::create();
+        $document = $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $package->addPart('/word/media/remove.png', 'image/png', 'remove');
+        $package->addPart('/word/media/keep.png', 'image/png', 'keep');
+        $document->addRelationship('urn:image', 'media/remove.png', id: 'rId1');
+        $document->addRelationship('urn:image', 'media/keep.png', id: 'rId2');
+
+        $package->removePartAndRelationships('/word/media/remove.png');
+
+        self::assertCount(1, $document->getRelationships());
+        self::assertSame('/word/media/keep.png', $document->getRelationships()->get('rId2')->getTargetPartName());
+        self::assertTrue($package->hasPart('/word/media/keep.png'));
     }
 
     public function testPartCanBeMovedWithInboundAndOutgoingRelationships(): void

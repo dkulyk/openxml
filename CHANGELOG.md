@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Inbound relationship inspection, strict referenced-part removal, and an
+  explicit cascading removal API with a structured result.
 - Explicit package repair analysis and application for selected dangling or
   invalid relationships, orphan relationship parts, and content-type issues.
 - Relationship lookup by raw or resolved target, explicit retargeting, and bulk

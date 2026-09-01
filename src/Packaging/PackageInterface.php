@@ -23,6 +23,11 @@ interface PackageInterface
 
     public function removePart(string $name): void;
 
+    /** @return list<RelationshipReference> */
+    public function getInboundRelationships(string $partName): array;
+
+    public function removePartAndRelationships(string $name): PartRemovalResult;
+
     public function movePart(string $source, string $destination): PartInterface;
 
     public function getRelationships(?string $sourcePartName = null): Relationships;
