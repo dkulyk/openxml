@@ -227,6 +227,57 @@ final class OpenXmlPackage implements PackageInterface
         $this->changed = true;
     }
 
+    public function movePart(string $source, string $destination): PartInterface
+    {
+        $source = PartName::normalize($source);
+        $destination = PartName::normalize($destination);
+        if (PartName::isRelationshipsPart($source) || PartName::isRelationshipsPart($destination)) {
+            throw new OpenXmlException('Relationship parts are managed through the relationship API.');
+        }
+        if (!$this->hasPart($source)) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $source));
+        }
+        if ($source === $destination) {
+            return $this->getPart($source);
+        }
+        if ($this->hasPart($destination)) {
+            throw new OpenXmlException(sprintf('Package part already exists: %s', $destination));
+        }
+
+        $contentType = $this->getPart($source)->getContentType();
+        $relationshipChanges = $this->relationshipChangesForMove($source, $destination);
+        $sourceRelationshipPart = PartName::relationshipsName($source);
+        $destinationRelationshipPart = PartName::relationshipsName($destination);
+        if (
+            $this->container->has(PartName::entry($sourceRelationshipPart))
+            && $this->container->has(PartName::entry($destinationRelationshipPart))
+        ) {
+            throw new OpenXmlException(sprintf(
+                'Destination relationship part already exists: %s',
+                $destinationRelationshipPart,
+            ));
+        }
+
+        $this->container->move(PartName::entry($source), PartName::entry($destination));
+        if ($this->container->has(PartName::entry($sourceRelationshipPart))) {
+            $this->container->move(
+                PartName::entry($sourceRelationshipPart),
+                PartName::entry($destinationRelationshipPart),
+            );
+        }
+
+        $this->contentTypes->removeOverride($source);
+        $this->contentTypes->setOverride($destination, $contentType);
+
+        foreach ($relationshipChanges as [$relationshipSource, $id, $target]) {
+            $this->getRelationships($relationshipSource)->replaceTarget($id, $target);
+        }
+
+        $this->changed = true;
+
+        return $this->getPart($destination);
+    }
+
     public function getRelationships(?string $sourcePartName = null): Relationships
     {
         if ($sourcePartName !== null && !$this->hasPart($sourcePartName)) {
@@ -461,6 +512,45 @@ final class OpenXmlPackage implements PackageInterface
         $this->contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
         $this->container->write($relationshipEntryName, $relationships->toXml());
         $this->changed = true;
+    }
+
+    /**
+     * @return list<array{?string, string, string}>
+     */
+    private function relationshipChangesForMove(string $source, string $destination): array
+    {
+        $partNames = [];
+        foreach ($this->getParts() as $part) {
+            $partNames[] = $part->getName();
+        }
+
+        $changes = [];
+        foreach ([null, ...$partNames] as $relationshipSource) {
+            foreach ($this->getRelationships($relationshipSource) as $relationship) {
+                if ($relationship->isExternal()) {
+                    continue;
+                }
+
+                $targetPartName = (string) $relationship->getTargetPartName();
+                $newRelationshipSource = $relationshipSource === $source
+                    ? $destination
+                    : $relationshipSource;
+
+                if ($targetPartName === $source) {
+                    $newTarget = str_starts_with($relationship->getTarget(), '/')
+                        ? $destination
+                        : PartName::relativeTarget($newRelationshipSource, $destination);
+                } elseif ($relationshipSource === $source && !str_starts_with($relationship->getTarget(), '/')) {
+                    $newTarget = PartName::relativeTarget($destination, $targetPartName);
+                } else {
+                    continue;
+                }
+
+                $changes[] = [$newRelationshipSource, $relationship->getId(), $newTarget];
+            }
+        }
+
+        return $changes;
     }
 
     private function persist(string $filename, ?string $expectedFingerprint = null): void

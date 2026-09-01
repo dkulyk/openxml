@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Atomic staged part moves with content-type migration, relationship-part moves,
+  and automatic inbound and outgoing relationship target updates.
 - OPC consistency checks for orphan relationship parts, stale content-type
   overrides, incorrect relationship content types, and invalid internal targets.
 - Windows compatibility coverage and weekly, manually dispatchable LibreOffice interoperability and package benchmark workflows.

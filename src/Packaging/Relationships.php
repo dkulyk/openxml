@@ -141,6 +141,28 @@ final class Relationships implements \IteratorAggregate, \Countable
         $this->notifyChanged();
     }
 
+    public function replaceTarget(string $id, string $target): RelationshipInterface
+    {
+        $current = $this->get($id);
+        $replacement = new Relationship(
+            $current->getId(),
+            $current->getType(),
+            $target,
+            $current->isExternal(),
+            $this->package,
+            $this->sourcePartName,
+        );
+
+        if ($target === '') {
+            throw new OpenXmlException('Relationship target must not be empty.');
+        }
+
+        $this->relationships[$id] = $replacement;
+        $this->notifyChanged();
+
+        return $replacement;
+    }
+
     public function getIterator(): \Traversable
     {
         yield from $this->relationships;
