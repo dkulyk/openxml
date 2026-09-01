@@ -39,7 +39,8 @@
         "source": "https://github.com/dkulyk/openxml"
     },
     "suggest": {
-        "dkulyk/compound-file": "Required to inspect CFBF containers and recognize encrypted Office Open XML files."
+        "dkulyk/compound-file": "Required to inspect, encrypt, and decrypt CFBF-based Office Open XML files.",
+        "ext-openssl": "Required to encrypt and decrypt Office Open XML files."
     },
     "scripts": {
         "test": "phpunit",

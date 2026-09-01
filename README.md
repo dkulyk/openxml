@@ -40,6 +40,55 @@ For a CFBF signature, detection requires `dkulyk/compound-file`. Without it,
 both `EncryptionInfo` and `EncryptedPackage` is recognized as encrypted OOXML;
 missing or structurally invalid encryption streams are rejected explicitly.
 
+## Encrypting and decrypting Office files
+
+The optional encryption API writes ECMA-376 Agile Encryption using AES-256,
+SHA-512, a 100,000-iteration password hash, random salts, a password verifier,
+and package integrity HMAC. It requires `dkulyk/compound-file:^0.2` and PHP's
+OpenSSL extension.
+
+```php
+use DK\OpenXml\Encryption\EncryptedOfficeFile;
+
+EncryptedOfficeFile::encrypt(
+    source: 'document.docx',
+    destination: 'protected.docx',
+    password: 'a strong password',
+);
+
+EncryptedOfficeFile::decrypt(
+    source: 'protected.docx',
+    destination: 'decrypted.docx',
+    password: 'a strong password',
+);
+```
+
+Payload encryption and decryption are processed in 4096-byte segments. Output is
+written through temporary files and replaces the destination only after encryption,
+integrity, and OPC validation succeed. A wrong password or modified ciphertext does
+not overwrite an existing destination.
+
+Applications accepting untrusted encrypted files can lower the password-work and
+decrypted-size limits:
+
+```php
+use DK\OpenXml\Encryption\EncryptionLimits;
+
+EncryptedOfficeFile::decrypt(
+    'upload.docx',
+    'document.docx',
+    $password,
+    new EncryptionLimits(
+        maximumSpinCount: 500_000,
+        maximumDecryptedBytes: 256 * 1024 * 1024,
+    ),
+);
+```
+
+Only Agile Encryption with AES-256/CBC and SHA-512 is accepted by this API.
+Standard, Extensible, RC4, and legacy binary Office encryption are deliberately
+not implemented.
+
 ## Reading and navigating a package
 
 ```php
@@ -148,7 +197,7 @@ Unsafe or duplicate ZIP entry names, DTD declarations, unexpected OPC XML roots,
 ## Current limitations
 
 - Parts are currently held in memory; lazy streams and copy-through writes are not implemented yet.
-- Encrypted Office documents are detected but must be routed to an encryption-aware reader before they can be opened as OPC.
+- Encrypted Office documents must be explicitly decrypted before they can be opened as OPC; transparent mutable encrypted edit sessions are not implemented yet.
 - Digitally signed packages can be opened for inspection, but saving them is blocked because signatures cannot currently be preserved.
 - Atomic replacement depends on the destination filesystem supporting same-directory rename. If replacement is unavailable, saving fails and leaves the original file untouched.
 - Validation covers OPC structure and known integrity rules; it does not validate WordprocessingML, SpreadsheetML, or PresentationML schemas.
@@ -163,6 +212,10 @@ DK\OpenXml\OpenXmlPackage
 ├── Packaging\ContentTypes
 └── Internal\Container\ContainerInterface
     └── Internal\Container\ZipContainer
+
+DK\OpenXml\Encryption\EncryptedOfficeFile
+└── Internal\Encryption\AgileEncryption
+    └── dkulyk/compound-file (optional CFBF integration)
 ```
 
 The `Packaging` namespace is public OPC API. `Internal\Container` is not public API and may move to a shared package later without changing the OPC surface.

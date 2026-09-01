@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file. The format 
 - File-signature detection for OPC ZIP, CFBF/OLE, encrypted Office Open XML, and unknown files.
 - Explicit exceptions for missing optional CFBF support, malformed compound files, incomplete encryption streams, encrypted packages, and unsupported formats.
 - Optional `dkulyk/compound-file` integration, tested against its 0.2 writer API.
+- Agile Encryption read/write support with AES-256, SHA-512, password verification, data-integrity HMAC, segmented processing, and atomic output replacement.
+- Encryption work-factor and decrypted-size limits for untrusted files.
 
 ### Changed
 
