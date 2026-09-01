@@ -204,6 +204,19 @@ final class OpenXmlPackageTest extends TestCase
         self::assertCount(0, $package->getRelationships());
     }
 
+    public function testRemovingRelationshipsByResolvedTargetPersists(): void
+    {
+        $package = OpenXmlPackage::create();
+        $document = $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $package->addPart('/word/image.png', 'image/png', 'image');
+        $document->addRelationship('urn:image', 'image.png');
+        $document->addRelationship('urn:image', '/word/image.png');
+
+        self::assertSame(2, $document->getRelationships()->removeByTargetPart('/word/image.png'));
+        self::assertCount(0, $document->getRelationships());
+        self::assertSame([], $package->validate());
+    }
+
     public function testRemovingPartAlsoRemovesItsRelationshipPart(): void
     {
         $package = OpenXmlPackage::create();

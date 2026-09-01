@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Relationship lookup by raw or resolved target, explicit retargeting, and bulk
+  removal of internal relationships to a resolved part.
 - Atomic staged part moves with content-type migration, relationship-part moves,
   and automatic inbound and outgoing relationship target updates.
 - OPC consistency checks for orphan relationship parts, stale content-type

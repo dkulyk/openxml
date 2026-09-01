@@ -152,6 +152,24 @@ relationship content types, and unsupported digital-signature preservation.
 | `addRelationship(...)` | Create an internal or external relationship. |
 | `removeRelationship(string $id): void` | Remove a relationship by ID. |
 
+### `Relationships`
+
+| Method | Description |
+| --- | --- |
+| `get(string $id): RelationshipInterface` | Return a relationship by ID. |
+| `firstByType(string $type): ?RelationshipInterface` | Return the first relationship with an exact type. |
+| `getByType(string $type): array` | Return every relationship with an exact type. |
+| `firstByTarget(string $target): ?RelationshipInterface` | Match the serialized target exactly. |
+| `getByTarget(string $target): array` | Return all exact serialized-target matches. |
+| `getByTargetPart(string $partName): array` | Match internal relationships by normalized resolved part name. |
+| `retarget(string $id, string $target): RelationshipInterface` | Replace a target while preserving ID, type, and target mode. |
+| `removeByTargetPart(string $partName): int` | Remove internal relationships to a resolved part and return their count. |
+
+Raw target lookup distinguishes relative and absolute spellings. Resolved target
+lookup treats `media/image.png` and `/word/media/image.png` as the same target
+when both resolve from `/word/document.xml` to `/word/media/image.png`. External
+relationships are never returned or removed by resolved-part operations.
+
 `movePart()` also moves the part's relationship part. It rewrites relationships
 that target the moved part and adjusts its relative outgoing targets when the
 part changes directory. Existing destination parts are never overwritten.
