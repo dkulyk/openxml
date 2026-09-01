@@ -24,5 +24,7 @@ interface ContainerInterface
 
     public function remove(string $name): void;
 
+    public function move(string $source, string $destination): void;
+
     public function saveAs(string $filename): void;
 }

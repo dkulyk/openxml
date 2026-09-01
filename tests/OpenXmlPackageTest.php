@@ -215,6 +215,77 @@ final class OpenXmlPackageTest extends TestCase
         $package->getRelationships('/word/document.xml');
     }
 
+    public function testPartCanBeMovedWithInboundAndOutgoingRelationships(): void
+    {
+        $package = OpenXmlPackage::create();
+        $document = $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $package->addPart('/word/styles.xml', 'application/xml', '<styles/>');
+        $header = $package->addPart('/word/header.xml', 'application/xml', '<header/>');
+        $package->addRelationship('urn:document', 'word/document.xml', id: 'rId1');
+        $header->addRelationship('urn:document', 'document.xml', id: 'rId1');
+        $document->addRelationship('urn:styles', 'styles.xml', id: 'rId1');
+
+        $moved = $package->movePart('/word/document.xml', '/documents/main.xml');
+
+        self::assertSame('/documents/main.xml', $moved->getName());
+        self::assertSame('<document/>', $moved->getContents());
+        self::assertFalse($package->hasPart('/word/document.xml'));
+        self::assertSame('documents/main.xml', $package->getRelationships()->get('rId1')->getTarget());
+        self::assertSame('../documents/main.xml', $header->getRelationships()->get('rId1')->getTarget());
+        self::assertSame('../word/styles.xml', $moved->getRelationships()->get('rId1')->getTarget());
+        self::assertSame([], $package->validate());
+
+        $package->saveAs($this->filename);
+        $reopened = OpenXmlPackage::open($this->filename);
+        self::assertSame('<document/>', $reopened->getPart('/documents/main.xml')->getContents());
+        self::assertSame('/documents/main.xml', $reopened->getRelationships()->get('rId1')->getTargetPartName());
+        self::assertSame('/word/styles.xml', $reopened->getPart('/documents/main.xml')->getRelationships()->get('rId1')->getTargetPartName());
+    }
+
+    public function testMovingPartPreservesAbsoluteRelationshipTargets(): void
+    {
+        $package = OpenXmlPackage::create();
+        $document = $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $package->addPart('/styles.xml', 'application/xml', '<styles/>');
+        $package->addRelationship('urn:document', '/word/document.xml');
+        $document->addRelationship('urn:styles', '/styles.xml');
+
+        $moved = $package->movePart('/word/document.xml', '/documents/main.xml');
+
+        self::assertSame('/documents/main.xml', $package->getRelationships()->get('rId1')->getTarget());
+        self::assertSame('/styles.xml', $moved->getRelationships()->get('rId1')->getTarget());
+    }
+
+    public function testMovingAnUnchangedZipEntryPreservesItsCompressedMetadata(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/source.bin', 'application/octet-stream', random_bytes(128 * 1024));
+        $package->saveAs($this->filename);
+        $before = self::zipEntryMetadata($this->filename, 'media/source.bin');
+
+        $package = OpenXmlPackage::open($this->filename);
+        $package->movePart('/media/source.bin', '/assets/destination.bin');
+        $package->save();
+
+        self::assertSame($before, self::zipEntryMetadata($this->filename, 'assets/destination.bin'));
+        self::assertFalse(OpenXmlPackage::open($this->filename)->hasPart('/media/source.bin'));
+    }
+
+    public function testMovingPartToExistingDestinationIsRejectedWithoutChanges(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/source.xml', 'application/xml', 'source');
+        $package->addPart('/destination.xml', 'application/xml', 'destination');
+
+        try {
+            $package->movePart('/source.xml', '/destination.xml');
+            self::fail('Moving over an existing part was expected to fail.');
+        } catch (OpenXmlException) {
+            self::assertSame('source', $package->getPart('/source.xml')->getContents());
+            self::assertSame('destination', $package->getPart('/destination.xml')->getContents());
+        }
+    }
+
     public function testValidationReportsDanglingInternalTargetButIgnoresExternalTarget(): void
     {
         $package = OpenXmlPackage::create();

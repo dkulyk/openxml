@@ -20,6 +20,8 @@ interface PackageInterface
 
     public function removePart(string $name): void;
 
+    public function movePart(string $source, string $destination): PartInterface;
+
     public function getRelationships(?string $sourcePartName = null): Relationships;
 
     public function addRelationship(string $type, string $target, bool $external = false, ?string $id = null, ?string $sourcePartName = null): RelationshipInterface;

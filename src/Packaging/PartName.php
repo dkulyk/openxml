@@ -90,6 +90,24 @@ final class PartName
         return self::normalize($base . $target);
     }
 
+    public static function relativeTarget(?string $sourcePartName, string $targetPartName): string
+    {
+        $targetSegments = explode('/', ltrim(self::normalize($targetPartName), '/'));
+        if ($sourcePartName === null) {
+            return implode('/', $targetSegments);
+        }
+
+        $sourceDirectory = trim(self::directory(self::normalize($sourcePartName)), '/');
+        $sourceSegments = $sourceDirectory === '' ? [] : explode('/', $sourceDirectory);
+
+        while ($sourceSegments !== [] && $targetSegments !== [] && $sourceSegments[0] === $targetSegments[0]) {
+            array_shift($sourceSegments);
+            array_shift($targetSegments);
+        }
+
+        return str_repeat('../', count($sourceSegments)) . implode('/', $targetSegments);
+    }
+
     private static function directory(string $name): string
     {
         $separator = strrpos($name, '/');

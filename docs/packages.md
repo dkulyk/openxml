@@ -126,6 +126,7 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
 | `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
 | `removePart(string $name): void` | Remove a part and its relationship part. |
+| `movePart(string $source, string $destination): PartInterface` | Move a part and update relationships that depend on its name. |
 | `getRelationships(?string $sourcePartName = null): Relationships` | Read package or part relationships. |
 | `validate(): array` | Return structural issues without saving. |
 | `hasChanges(): bool` | Report whether edits are staged. |
@@ -150,3 +151,7 @@ relationship content types, and unsupported digital-signature preservation.
 | `getRelationships(): Relationships` | Return relationships originating at this part. |
 | `addRelationship(...)` | Create an internal or external relationship. |
 | `removeRelationship(string $id): void` | Remove a relationship by ID. |
+
+`movePart()` also moves the part's relationship part. It rewrites relationships
+that target the moved part and adjusts its relative outgoing targets when the
+part changes directory. Existing destination parts are never overwritten.

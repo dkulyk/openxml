@@ -21,6 +21,9 @@ final class RelationshipsTest extends TestCase
         self::assertNull(PartName::relationshipSourceName('/_rels/.rels'));
         self::assertSame('/word/document.xml', PartName::relationshipSourceName('/word/_rels/document.xml.rels'));
         self::assertSame('/document.xml', PartName::relationshipSourceName('/_rels/document.xml.rels'));
+        self::assertSame('media/image.png', PartName::relativeTarget('/word/document.xml', '/word/media/image.png'));
+        self::assertSame('../styles.xml', PartName::relativeTarget('/word/nested/document.xml', '/word/styles.xml'));
+        self::assertSame('word/document.xml', PartName::relativeTarget(null, '/word/document.xml'));
     }
 
     public function testRelationshipSourceRejectsAnOrdinaryPart(): void
@@ -46,6 +49,17 @@ final class RelationshipsTest extends TestCase
         $items->create('urn:a', 'a.xml', false, 'rId1');
         $items->create('urn:c', 'c.xml', false, 'rId3');
         self::assertSame('rId2', $items->create('urn:b', 'b.xml')->getId());
+    }
+
+    public function testRelationshipTargetCanBeReplaced(): void
+    {
+        $items = new Relationships();
+        $items->create('urn:a', 'old.xml', false, 'rId1');
+
+        $replacement = $items->replaceTarget('rId1', 'new.xml');
+
+        self::assertSame('new.xml', $replacement->getTarget());
+        self::assertSame('new.xml', $items->get('rId1')->getTarget());
     }
 
     public function testDuplicateIdIsRejected(): void

@@ -21,6 +21,9 @@ final class ZipContainer implements ContainerInterface
     /** @var array<string, true> */
     private array $removed = [];
 
+    /** @var array<string, string> Destination entry names mapped to their source ZIP entry. */
+    private array $moved = [];
+
     public function __construct(
         private PackageLimits $limits = new PackageLimits(),
         private ?string $sourceFilename = null,
@@ -129,7 +132,8 @@ final class ZipContainer implements ContainerInterface
         }
 
         try {
-            $source = $archive->getStream($name);
+            $sourceEntryName = $this->moved[$name] ?? $name;
+            $source = $archive->getStream($sourceEntryName);
             if ($source === false) {
                 throw new OpenXmlException(sprintf('Unable to open ZIP entry "%s".', $name));
             }
@@ -171,6 +175,7 @@ final class ZipContainer implements ContainerInterface
         $this->staged[$name] = $contents;
         $this->entries[$name] = strlen($contents);
         unset($this->removed[$name]);
+        unset($this->moved[$name]);
     }
 
     public function writeStream(string $name, $stream): void
@@ -215,6 +220,7 @@ final class ZipContainer implements ContainerInterface
             $this->staged[$name] = $staged;
             $this->entries[$name] = $bytes;
             unset($this->removed[$name]);
+            unset($this->moved[$name]);
         } catch (\Throwable $exception) {
             fclose($staged);
 
@@ -226,9 +232,37 @@ final class ZipContainer implements ContainerInterface
     {
         $this->closeStagedResource($name);
         unset($this->staged[$name]);
+        unset($this->moved[$name]);
         if (isset($this->entries[$name])) {
             $this->removed[$name] = true;
         }
+    }
+
+    public function move(string $source, string $destination): void
+    {
+        self::assertSafeEntryName($source);
+        self::assertSafeEntryName($destination);
+        if (!$this->has($source)) {
+            throw new OpenXmlException(sprintf('ZIP entry "%s" does not exist.', $source));
+        }
+        if ($this->has($destination)) {
+            throw new OpenXmlException(sprintf('ZIP entry "%s" already exists.', $destination));
+        }
+
+        $this->entries[$destination] = $this->entries[$source];
+        unset($this->entries[$source]);
+        $this->removed[$source] = true;
+        unset($this->removed[$destination]);
+
+        if (array_key_exists($source, $this->staged)) {
+            $this->staged[$destination] = $this->staged[$source];
+            unset($this->staged[$source]);
+
+            return;
+        }
+
+        $this->moved[$destination] = $this->moved[$source] ?? $source;
+        unset($this->moved[$source]);
     }
 
     public function saveAs(string $filename): void
@@ -246,6 +280,15 @@ final class ZipContainer implements ContainerInterface
         }
 
         try {
+            foreach ($this->moved as $destination => $source) {
+                if ($archive->locateName($source) === false || !$archive->renameName($source, $destination)) {
+                    throw new OpenXmlException(sprintf(
+                        'Unable to move ZIP entry "%s" to "%s".',
+                        $source,
+                        $destination,
+                    ));
+                }
+            }
             foreach ($this->removed as $entryName => $_removed) {
                 if ($archive->locateName($entryName) !== false && !$archive->deleteName($entryName)) {
                     throw new OpenXmlException(sprintf('Unable to remove ZIP entry "%s".', $entryName));
