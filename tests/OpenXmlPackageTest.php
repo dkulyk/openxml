@@ -6,10 +6,12 @@ namespace DK\OpenXml\Tests;
 
 use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\OpenXmlException;
+use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Exception\PackageValidationException;
 use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\OpenXmlPackage;
 use DK\OpenXml\Packaging\RelationshipType;
+use DK\OpenXml\Security\PackageLimits;
 use PHPUnit\Framework\TestCase;
 
 final class OpenXmlPackageTest extends TestCase
@@ -67,6 +69,128 @@ final class OpenXmlPackageTest extends TestCase
         $part = $package->addPart('/doc.xml', 'application/xml', 'old');
         $part->setContents('new');
         self::assertSame('new', $package->getPart('/doc.xml')->getContents());
+    }
+
+    public function testPartCanBeAddedAndReadAsAStream(): void
+    {
+        $source = tmpfile();
+        self::assertIsResource($source);
+        fwrite($source, 'ignored-prefix');
+        fwrite($source, "\x00binary-media\xFF");
+        fseek($source, strlen('ignored-prefix'));
+
+        $package = OpenXmlPackage::create();
+        $part = $package->addPartFromStream('/media/image.bin', 'application/octet-stream', $source);
+        fclose($source);
+        $package->saveAs($this->filename);
+
+        $stream = OpenXmlPackage::open($this->filename)->getPart('/media/image.bin')->openStream();
+
+        try {
+            self::assertSame("\x00binary-media\xFF", stream_get_contents($stream));
+        } finally {
+            fclose($stream);
+        }
+        self::assertSame("\x00binary-media\xFF", $part->getContents());
+    }
+
+    public function testPartStreamCanReplaceExistingContents(): void
+    {
+        $package = OpenXmlPackage::create();
+        $part = $package->addPart('/media.bin', 'application/octet-stream', 'old');
+        $source = fopen('php://temp', 'w+b');
+        self::assertIsResource($source);
+        fwrite($source, 'new streamed contents');
+        rewind($source);
+
+        $part->setContentsFromStream($source);
+        fclose($source);
+
+        self::assertSame('new streamed contents', $part->getContents());
+    }
+
+    public function testFailedStreamWriteLeavesExistingPartUntouched(): void
+    {
+        $package = OpenXmlPackage::create(new PackageLimits(
+            maximumPartBytes: 8,
+            maximumPackageBytes: 64,
+        ));
+        $part = $package->addPart('/media.bin', 'application/octet-stream', 'original');
+        $source = fopen('php://temp', 'w+b');
+        self::assertIsResource($source);
+        fwrite($source, 'too many bytes');
+        rewind($source);
+
+        try {
+            $part->setContentsFromStream($source);
+            self::fail('The streamed part was expected to exceed its limit.');
+        } catch (PackageLimitException) {
+            self::assertSame('original', $part->getContents());
+        } finally {
+            fclose($source);
+        }
+    }
+
+    public function testSavingAnEditPreservesUnchangedEntryMetadata(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<original/>');
+        $package->addPart('/media.bin', 'application/octet-stream', random_bytes(128 * 1024));
+        $package->saveAs($this->filename);
+        $before = self::zipEntryMetadata($this->filename, 'media.bin');
+
+        $package = OpenXmlPackage::open($this->filename);
+        $package->getPart('/document.xml')->setContents('<changed/>');
+        $package->save();
+
+        self::assertSame($before, self::zipEntryMetadata($this->filename, 'media.bin'));
+    }
+
+    public function testOpeningPackageDoesNotLoadLargePartContentsIntoMemory(): void
+    {
+        $media = tmpfile();
+        self::assertIsResource($media);
+        $hash = hash_init('sha256');
+        for ($chunk = 0; $chunk < 128; ++$chunk) {
+            $contents = random_bytes(65_536);
+            hash_update($hash, $contents);
+            fwrite($media, $contents);
+        }
+        fflush($media);
+        $metadata = stream_get_meta_data($media);
+        $mediaPath = $metadata['uri'] ?? null;
+        if (!is_string($mediaPath)) {
+            throw new \RuntimeException('Temporary media stream has no filesystem path.');
+        }
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename, \ZipArchive::OVERWRITE));
+        self::assertTrue($archive->addFromString(
+            '[Content_Types].xml',
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            . '<Override PartName="/media.bin" ContentType="application/octet-stream"/>'
+            . '</Types>',
+        ));
+        self::assertTrue($archive->addFile($mediaPath, 'media.bin'));
+        self::assertTrue($archive->close());
+        fclose($media);
+
+        gc_collect_cycles();
+        $memoryBefore = memory_get_usage(true);
+        $package = OpenXmlPackage::open($this->filename);
+        $memoryIncrease = memory_get_usage(true) - $memoryBefore;
+        self::assertLessThan(2 * 1024 * 1024, $memoryIncrease);
+
+        $stream = $package->getPart('/media.bin')->openStream();
+
+        try {
+            $streamHash = hash_init('sha256');
+            hash_update_stream($streamHash, $stream);
+            self::assertSame(hash_final($hash), hash_final($streamHash));
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function testRelationshipCollectionMutationsPersist(): void
@@ -215,6 +339,16 @@ final class OpenXmlPackageTest extends TestCase
         $secondEditor->save();
     }
 
+    public function testLazyPartReadRejectsAChangedSourcePackage(): void
+    {
+        $this->createSavedPackage('<original/>');
+        $package = OpenXmlPackage::open($this->filename);
+        file_put_contents($this->filename, 'changed outside the package');
+
+        $this->expectException(ConcurrentModificationException::class);
+        $package->getPart('/document.xml')->openStream();
+    }
+
     public function testNewPackageRequiresSaveAs(): void
     {
         $package = OpenXmlPackage::create();
@@ -231,5 +365,25 @@ final class OpenXmlPackageTest extends TestCase
         $package->saveAs($this->filename);
 
         return $package;
+    }
+
+    /** @return array{crc: int, comp_size: int, comp_method: int} */
+    private static function zipEntryMetadata(string $filename, string $entryName): array
+    {
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($filename));
+
+        try {
+            $metadata = $archive->statName($entryName);
+            self::assertIsArray($metadata);
+
+            return [
+                'crc' => $metadata['crc'],
+                'comp_size' => $metadata['comp_size'],
+                'comp_method' => $metadata['comp_method'],
+            ];
+        } finally {
+            $archive->close();
+        }
     }
 }

@@ -16,6 +16,7 @@ or PresentationML documents.
 ## Features
 
 - Read and write OPC parts and `[Content_Types].xml` declarations.
+- Stream large binary parts without keeping their contents in PHP strings.
 - Navigate, create, and remove package-level and part-level relationships.
 - Resolve internal relationship targets relative to their source parts.
 - Stage edits in memory and save through atomic file replacement.
@@ -101,6 +102,44 @@ $document->addRelationship('urn:styles', 'styles.xml');
 $package->saveAs('document.docx');
 ```
 
+### Streaming large parts
+
+Use streams for images, embedded files, and other large binary parts:
+
+```php
+$image = fopen('photo.png', 'rb');
+if ($image === false) {
+    throw new RuntimeException('Unable to open photo.png.');
+}
+
+try {
+    $part = $package->addPartFromStream(
+        '/word/media/image1.png',
+        'image/png',
+        $image,
+    );
+} finally {
+    fclose($image);
+}
+```
+
+The input is consumed from its current position to EOF and staged in temporary
+storage, so it can be closed immediately. To read or replace an existing part:
+
+```php
+$contents = $part->openStream();
+try {
+    stream_copy_to_stream($contents, $destination);
+} finally {
+    fclose($contents);
+}
+
+$part->setContentsFromStream($replacement);
+```
+
+The caller owns streams returned by `openStream()` and must close them. Small
+parts can continue to use `getContents()` and `setContents()`.
+
 Package and part relationship collections support lookup, filtering, creation,
 and removal. Mutations made through a collection obtained from the package are
 persisted automatically.
@@ -119,9 +158,11 @@ if ($package->hasChanges()) {
 ```
 
 The complete ZIP is written to a temporary file in the destination directory,
-validated, and then moved over the destination. Validation failures and write
-errors leave the original file untouched. Saving is also rejected when the source
-changed on disk after it was opened.
+validated, and then moved over the destination. For an existing package, unchanged
+ZIP entries are copied through with their existing compressed representation;
+only staged entries are replaced. Validation failures and write errors leave the
+original file untouched. Saving and lazy reads are rejected when the source changed
+on disk after it was opened.
 
 Discard staged changes with:
 
@@ -242,13 +283,15 @@ DK\OpenXml\Encryption\EncryptedOfficeFile
 ```
 
 `Packaging` is the public OPC API. ZIP remains behind an internal container
-boundary so it can later move to shared package infrastructure without changing
-the OPC surface. Domain-specific Office XML models belong in libraries built on
-top of this package.
+boundary and keeps only entry metadata in memory when opening a package. Streamed
+writes are staged in temporary files, while unchanged entries use ZIP copy-through.
+The container can later move to shared package infrastructure without changing the
+OPC surface. Domain-specific Office XML models belong in libraries built on top of
+this package.
 
 ## Current limitations
 
-- Parts are held in memory; lazy streams and copy-through ZIP writes are not implemented yet.
+- `getContents()` still materializes a complete part; use `openStream()` for large payloads.
 - Encrypted documents must be explicitly decrypted before opening them as OPC.
 - Digitally signed packages can be inspected, but saving is blocked because signatures cannot be preserved yet.
 - Atomic replacement requires same-directory rename support from the destination filesystem.

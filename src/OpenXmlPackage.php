@@ -131,9 +131,7 @@ final class OpenXmlPackage implements PackageInterface
             throw new OpenXmlException(sprintf('No content type is registered for part "%s".', $name));
         }
 
-        $contents = $this->container->read(PartName::entry($name));
-
-        return new Part($this, $name, $contentType, $contents);
+        return new Part($this, $name, $contentType);
     }
 
     public function getParts(): \Traversable
@@ -164,6 +162,39 @@ final class OpenXmlPackage implements PackageInterface
         return $this->getPart($name);
     }
 
+    public function addPartFromStream(string $name, string $contentType, $stream): PartInterface
+    {
+        $name = PartName::normalize($name);
+        if (PartName::isRelationshipsPart($name)) {
+            throw new OpenXmlException('Relationship parts are managed through the relationship API.');
+        }
+
+        $this->container->writeStream(PartName::entry($name), $stream);
+        $this->contentTypes->setOverride($name, $contentType);
+        $this->changed = true;
+
+        return $this->getPart($name);
+    }
+
+    public function readPart(string $name): string
+    {
+        if (!$this->hasPart($name)) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $name));
+        }
+
+        return $this->container->read(PartName::entry($name));
+    }
+
+    /** @return resource */
+    public function openPartStream(string $name)
+    {
+        if (!$this->hasPart($name)) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $name));
+        }
+
+        return $this->container->openStream(PartName::entry($name));
+    }
+
     public function writePart(string $name, string $contents): void
     {
         if (!$this->hasPart($name)) {
@@ -171,6 +202,17 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         $this->container->write(PartName::entry($name), $contents);
+        $this->changed = true;
+    }
+
+    /** @param resource $stream */
+    public function writePartFromStream(string $name, $stream): void
+    {
+        if (!$this->hasPart($name)) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $name));
+        }
+
+        $this->container->writeStream(PartName::entry($name), $stream);
         $this->changed = true;
     }
 
@@ -396,6 +438,7 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->sourceFilename = self::resolveExistingFilename($filename);
         $this->sourceFingerprint = self::fingerprint($this->sourceFilename);
+        $this->container = ZipContainer::open($this->sourceFilename, $this->limits);
         $this->changed = false;
     }
 

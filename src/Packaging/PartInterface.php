@@ -14,6 +14,12 @@ interface PartInterface
 
     public function setContents(string $contents): void;
 
+    /** @return resource */
+    public function openStream();
+
+    /** @param resource $stream */
+    public function setContentsFromStream($stream): void;
+
     public function getRelationships(): Relationships;
 
     public function addRelationship(string $type, string $target, bool $external = false, ?string $id = null): RelationshipInterface;

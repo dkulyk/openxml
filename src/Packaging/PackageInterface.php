@@ -15,6 +15,9 @@ interface PackageInterface
 
     public function addPart(string $name, string $contentType, string $contents): PartInterface;
 
+    /** @param resource $stream */
+    public function addPartFromStream(string $name, string $contentType, $stream): PartInterface;
+
     public function removePart(string $name): void;
 
     public function getRelationships(?string $sourcePartName = null): Relationships;

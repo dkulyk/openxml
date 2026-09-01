@@ -12,7 +12,6 @@ final class Part implements PartInterface
         private OpenXmlPackage $package,
         private string $name,
         private string $contentType,
-        private string $contents,
     ) {
         $this->name = PartName::normalize($name);
     }
@@ -29,13 +28,22 @@ final class Part implements PartInterface
 
     public function getContents(): string
     {
-        return $this->contents;
+        return $this->package->readPart($this->name);
     }
 
     public function setContents(string $contents): void
     {
-        $this->contents = $contents;
         $this->package->writePart($this->name, $contents);
+    }
+
+    public function openStream()
+    {
+        return $this->package->openPartStream($this->name);
+    }
+
+    public function setContentsFromStream($stream): void
+    {
+        $this->package->writePartFromStream($this->name, $stream);
     }
 
     public function getRelationships(): Relationships

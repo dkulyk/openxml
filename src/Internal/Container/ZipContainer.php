@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DK\OpenXml\Internal\Container;
 
+use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Security\PackageLimits;
@@ -11,16 +12,34 @@ use DK\OpenXml\Security\PackageLimits;
 /** @internal */
 final class ZipContainer implements ContainerInterface
 {
-    /** @var array<string, string> */
+    /** @var array<string, int> Uncompressed entry sizes. */
     private array $entries = [];
 
-    public function __construct(private PackageLimits $limits = new PackageLimits()) {}
+    /** @var array<string, string|resource> */
+    private array $staged = [];
+
+    /** @var array<string, true> */
+    private array $removed = [];
+
+    public function __construct(
+        private PackageLimits $limits = new PackageLimits(),
+        private ?string $sourceFilename = null,
+        private ?string $sourceFingerprint = null,
+    ) {}
+
+    public function __destruct()
+    {
+        foreach ($this->staged as $contents) {
+            if (is_resource($contents)) {
+                fclose($contents);
+            }
+        }
+    }
 
     public static function open(string $filename, ?PackageLimits $limits = null): self
     {
         $limits ??= new PackageLimits();
         $archive = new \ZipArchive();
-
         if ($archive->open($filename) !== true) {
             throw new OpenXmlException(sprintf('Unable to open package "%s".', $filename));
         }
@@ -34,49 +53,34 @@ final class ZipContainer implements ContainerInterface
                 ));
             }
 
-            $container = new self($limits);
-            $totalUncompressedBytes = 0;
-
+            $container = new self($limits, $filename);
+            $totalBytes = 0;
             for ($index = 0; $index < $archive->numFiles; ++$index) {
                 $entry = $archive->statIndex($index);
                 if ($entry === false) {
                     throw new OpenXmlException(sprintf('Unable to inspect ZIP entry at index %d.', $index));
                 }
-
-                $entryName = $entry['name'];
-                if (str_ends_with($entryName, '/')) {
+                $name = $entry['name'];
+                if (str_ends_with($name, '/')) {
                     continue;
                 }
 
-                self::assertSafeEntryName($entryName);
-                if (isset($container->entries[$entryName])) {
-                    throw new OpenXmlException(sprintf('Duplicate ZIP entry "%s".', $entryName));
+                self::assertSafeEntryName($name);
+                if (isset($container->entries[$name])) {
+                    throw new OpenXmlException(sprintf('Duplicate ZIP entry "%s".', $name));
                 }
-
-                $uncompressedBytes = $entry['size'];
-                $compressedBytes = $entry['comp_size'];
-                self::assertEntryWithinLimits(
-                    $entryName,
-                    $uncompressedBytes,
-                    $compressedBytes,
-                    $limits,
-                );
-
-                $totalUncompressedBytes += $uncompressedBytes;
-                if ($totalUncompressedBytes > $limits->maximumPackageBytes) {
+                self::assertEntryWithinLimits($name, $entry['size'], $entry['comp_size'], $limits);
+                $totalBytes += $entry['size'];
+                if ($totalBytes > $limits->maximumPackageBytes) {
                     throw new PackageLimitException(sprintf(
                         'Package expands beyond the configured maximum of %d bytes.',
                         $limits->maximumPackageBytes,
                     ));
                 }
-
-                $contents = $archive->getFromIndex($index);
-                if ($contents === false) {
-                    throw new OpenXmlException(sprintf('Unable to read ZIP entry "%s".', $entryName));
-                }
-
-                $container->entries[$entryName] = $contents;
+                $container->entries[$name] = $entry['size'];
             }
+
+            $container->sourceFingerprint = self::fingerprint($filename);
 
             return $container;
         } finally {
@@ -86,78 +90,180 @@ final class ZipContainer implements ContainerInterface
 
     public function has(string $name): bool
     {
-        return array_key_exists($name, $this->entries);
+        return isset($this->entries[$name]) && !isset($this->removed[$name]);
     }
 
     public function read(string $name): string
     {
+        $stream = $this->openStream($name);
+
+        try {
+            $contents = stream_get_contents($stream);
+            if ($contents === false) {
+                throw new OpenXmlException(sprintf('Unable to read ZIP entry "%s".', $name));
+            }
+
+            return $contents;
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function openStream(string $name)
+    {
         if (!$this->has($name)) {
             throw new OpenXmlException(sprintf('ZIP entry "%s" does not exist.', $name));
         }
+        if (isset($this->staged[$name])) {
+            return $this->copyToIndependentStream($this->staged[$name], $name);
+        }
+        $sourceFilename = $this->sourceFilename;
+        if ($sourceFilename === null) {
+            throw new OpenXmlException(sprintf('ZIP entry "%s" has no content source.', $name));
+        }
+        $this->assertSourceUnchanged();
 
-        return $this->entries[$name];
+        $archive = new \ZipArchive();
+        if ($archive->open($sourceFilename) !== true) {
+            throw new OpenXmlException(sprintf('Unable to reopen package "%s".', $sourceFilename));
+        }
+
+        try {
+            $source = $archive->getStream($name);
+            if ($source === false) {
+                throw new OpenXmlException(sprintf('Unable to open ZIP entry "%s".', $name));
+            }
+
+            try {
+                $stream = $this->copyResourceToIndependentStream($source, $name, false);
+
+                try {
+                    $this->assertSourceUnchanged();
+                } catch (\Throwable $exception) {
+                    fclose($stream);
+
+                    throw $exception;
+                }
+
+                return $stream;
+            } finally {
+                fclose($source);
+            }
+        } finally {
+            $archive->close();
+        }
     }
 
     public function entries(): iterable
     {
-        yield from array_keys($this->entries);
+        foreach ($this->entries as $name => $_size) {
+            if (!isset($this->removed[$name])) {
+                yield $name;
+            }
+        }
     }
 
     public function write(string $name, string $contents): void
     {
         self::assertSafeEntryName($name);
+        $this->assertWriteWithinLimits($name, strlen($contents));
+        $this->closeStagedResource($name);
+        $this->staged[$name] = $contents;
+        $this->entries[$name] = strlen($contents);
+        unset($this->removed[$name]);
+    }
 
-        $contentsBytes = strlen($contents);
-        if ($contentsBytes > $this->limits->maximumPartBytes) {
-            throw new PackageLimitException(sprintf(
-                'Part "%s" exceeds the configured maximum of %d bytes.',
-                $name,
-                $this->limits->maximumPartBytes,
-            ));
+    public function writeStream(string $name, $stream): void
+    {
+        if (!is_resource($stream) || get_resource_type($stream) !== 'stream') {
+            throw new \InvalidArgumentException('Part contents must be a readable stream resource.');
+        }
+        $metadata = stream_get_meta_data($stream);
+        if (!str_contains($metadata['mode'], 'r') && !str_contains($metadata['mode'], '+')) {
+            throw new \InvalidArgumentException('Part contents stream is not readable.');
+        }
+        self::assertSafeEntryName($name);
+        $staged = tmpfile();
+        if ($staged === false) {
+            throw new OpenXmlException('Unable to create temporary storage for streamed part contents.');
         }
 
-        $existingBytes = isset($this->entries[$name]) ? strlen($this->entries[$name]) : 0;
-        $packageBytes = $this->currentSize() - $existingBytes + $contentsBytes;
+        try {
+            $bytes = 0;
+            while (!feof($stream)) {
+                $chunk = fread($stream, 65_536);
+                if ($chunk === false) {
+                    throw new OpenXmlException(sprintf('Unable to read streamed contents for part "%s".', $name));
+                }
+                if ($chunk === '') {
+                    break;
+                }
+                $bytes += strlen($chunk);
+                if ($bytes > $this->limits->maximumPartBytes) {
+                    throw new PackageLimitException(sprintf(
+                        'Part "%s" exceeds the configured maximum of %d bytes.',
+                        $name,
+                        $this->limits->maximumPartBytes,
+                    ));
+                }
+                self::writeToResource($staged, $chunk, $name);
+            }
 
-        if ($packageBytes > $this->limits->maximumPackageBytes) {
-            throw new PackageLimitException(sprintf(
-                'Package exceeds the configured maximum of %d bytes.',
-                $this->limits->maximumPackageBytes,
-            ));
+            $this->assertWriteWithinLimits($name, $bytes);
+            rewind($staged);
+            $this->closeStagedResource($name);
+            $this->staged[$name] = $staged;
+            $this->entries[$name] = $bytes;
+            unset($this->removed[$name]);
+        } catch (\Throwable $exception) {
+            fclose($staged);
+
+            throw $exception;
         }
-
-        if (!isset($this->entries[$name]) && count($this->entries) >= $this->limits->maximumEntries) {
-            throw new PackageLimitException(sprintf(
-                'Package exceeds the configured maximum of %d entries.',
-                $this->limits->maximumEntries,
-            ));
-        }
-
-        $this->entries[$name] = $contents;
     }
 
     public function remove(string $name): void
     {
-        unset($this->entries[$name]);
+        $this->closeStagedResource($name);
+        unset($this->staged[$name]);
+        if (isset($this->entries[$name])) {
+            $this->removed[$name] = true;
+        }
     }
 
     public function saveAs(string $filename): void
     {
-        $archive = new \ZipArchive();
-        $openResult = $archive->open($filename, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $this->assertSourceUnchanged();
+        $copySource = $this->sourceFilename !== null && is_file($this->sourceFilename);
+        if ($copySource && !copy($this->sourceFilename, $filename)) {
+            throw new OpenXmlException(sprintf('Unable to copy source package to "%s".', $filename));
+        }
 
-        if ($openResult !== true) {
+        $archive = new \ZipArchive();
+        $flags = $copySource ? 0 : \ZipArchive::CREATE | \ZipArchive::OVERWRITE;
+        if ($archive->open($filename, $flags) !== true) {
             throw new OpenXmlException(sprintf('Unable to create package "%s".', $filename));
         }
 
-        foreach ($this->entries as $entryName => $contents) {
-            if (!$archive->addFromString($entryName, $contents)) {
-                $archive->close();
-
-                throw new OpenXmlException(sprintf('Unable to write ZIP entry "%s".', $entryName));
+        try {
+            foreach ($this->removed as $entryName => $_removed) {
+                if ($archive->locateName($entryName) !== false && !$archive->deleteName($entryName)) {
+                    throw new OpenXmlException(sprintf('Unable to remove ZIP entry "%s".', $entryName));
+                }
             }
-        }
+            foreach ($this->staged as $entryName => $contents) {
+                $written = is_string($contents)
+                    ? $archive->addFromString($entryName, $contents)
+                    : $this->addStreamFile($archive, $entryName, $contents);
+                if (!$written) {
+                    throw new OpenXmlException(sprintf('Unable to write ZIP entry "%s".', $entryName));
+                }
+            }
+        } catch (\Throwable $exception) {
+            $archive->close();
 
+            throw $exception;
+        }
         if (!$archive->close()) {
             throw new OpenXmlException(sprintf('Unable to finalize package "%s".', $filename));
         }
@@ -165,7 +271,146 @@ final class ZipContainer implements ContainerInterface
 
     private function currentSize(): int
     {
-        return array_sum(array_map(strlen(...), $this->entries));
+        $bytes = 0;
+        foreach ($this->entries as $name => $size) {
+            if (!isset($this->removed[$name])) {
+                $bytes += $size;
+            }
+        }
+
+        return $bytes;
+    }
+
+    private function assertWriteWithinLimits(string $name, int $contentsBytes): void
+    {
+        if ($contentsBytes > $this->limits->maximumPartBytes) {
+            throw new PackageLimitException(sprintf(
+                'Part "%s" exceeds the configured maximum of %d bytes.',
+                $name,
+                $this->limits->maximumPartBytes,
+            ));
+        }
+        $existingBytes = $this->has($name) ? $this->entries[$name] : 0;
+        if ($this->currentSize() - $existingBytes + $contentsBytes > $this->limits->maximumPackageBytes) {
+            throw new PackageLimitException(sprintf(
+                'Package exceeds the configured maximum of %d bytes.',
+                $this->limits->maximumPackageBytes,
+            ));
+        }
+        if (!$this->has($name) && $this->currentEntryCount() >= $this->limits->maximumEntries) {
+            throw new PackageLimitException(sprintf(
+                'Package exceeds the configured maximum of %d entries.',
+                $this->limits->maximumEntries,
+            ));
+        }
+    }
+
+    private function currentEntryCount(): int
+    {
+        $count = 0;
+        foreach ($this->entries() as $_name) {
+            ++$count;
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param string|resource $contents
+     *
+     * @return resource
+     */
+    private function copyToIndependentStream($contents, string $name)
+    {
+        if (is_string($contents)) {
+            $stream = self::temporaryStream();
+            self::writeToResource($stream, $contents, $name);
+            rewind($stream);
+
+            return $stream;
+        }
+
+        return $this->copyResourceToIndependentStream($contents, $name, true);
+    }
+
+    /**
+     * @param resource $source
+     *
+     * @return resource
+     */
+    private function copyResourceToIndependentStream($source, string $name, bool $rewindSource)
+    {
+        $position = null;
+        if ($rewindSource) {
+            $position = ftell($source);
+            if ($position === false || fseek($source, 0) !== 0) {
+                throw new OpenXmlException(sprintf('Unable to rewind streamed contents for part "%s".', $name));
+            }
+        }
+        $destination = self::temporaryStream();
+
+        try {
+            if (stream_copy_to_stream($source, $destination) === false) {
+                throw new OpenXmlException(sprintf('Unable to stream ZIP entry "%s".', $name));
+            }
+            rewind($destination);
+
+            return $destination;
+        } catch (\Throwable $exception) {
+            fclose($destination);
+
+            throw $exception;
+        } finally {
+            if (is_int($position)) {
+                fseek($source, $position);
+            }
+        }
+    }
+
+    /** @return resource */
+    private static function temporaryStream()
+    {
+        $stream = fopen('php://temp/maxmemory:1048576', 'w+b');
+        if ($stream === false) {
+            throw new OpenXmlException('Unable to create a temporary part stream.');
+        }
+
+        return $stream;
+    }
+
+    /** @param resource $contents */
+    private function addStreamFile(\ZipArchive $archive, string $entryName, $contents): bool
+    {
+        if (!fflush($contents)) {
+            throw new OpenXmlException(sprintf('Unable to flush streamed contents for part "%s".', $entryName));
+        }
+        $metadata = stream_get_meta_data($contents);
+        $path = $metadata['uri'] ?? null;
+        if (!is_string($path) || !is_file($path)) {
+            throw new OpenXmlException(sprintf('Streamed contents for part "%s" have no temporary file.', $entryName));
+        }
+
+        return $archive->addFile($path, $entryName);
+    }
+
+    private function closeStagedResource(string $name): void
+    {
+        if (isset($this->staged[$name]) && is_resource($this->staged[$name])) {
+            fclose($this->staged[$name]);
+        }
+    }
+
+    /** @param resource $stream */
+    private static function writeToResource($stream, string $contents, string $name): void
+    {
+        $offset = 0;
+        while ($offset < strlen($contents)) {
+            $written = fwrite($stream, substr($contents, $offset));
+            if ($written === false || $written === 0) {
+                throw new OpenXmlException(sprintf('Unable to stage streamed contents for part "%s".', $name));
+            }
+            $offset += $written;
+        }
     }
 
     private static function assertSafeEntryName(string $name): void
@@ -198,11 +443,9 @@ final class ZipContainer implements ContainerInterface
                 $limits->maximumPartBytes,
             ));
         }
-
         $compressionRatio = $compressedBytes === 0
             ? ($uncompressedBytes === 0 ? 1.0 : INF)
             : $uncompressedBytes / $compressedBytes;
-
         if ($compressionRatio > $limits->maximumCompressionRatio) {
             throw new PackageLimitException(sprintf(
                 'Part "%s" has a suspicious compression ratio of %.2f.',
@@ -210,5 +453,28 @@ final class ZipContainer implements ContainerInterface
                 $compressionRatio,
             ));
         }
+    }
+
+    private function assertSourceUnchanged(): void
+    {
+        if ($this->sourceFilename === null || $this->sourceFingerprint === null) {
+            return;
+        }
+        if (!hash_equals($this->sourceFingerprint, self::fingerprint($this->sourceFilename))) {
+            throw new ConcurrentModificationException(sprintf(
+                'Package "%s" changed on disk after it was opened.',
+                $this->sourceFilename,
+            ));
+        }
+    }
+
+    private static function fingerprint(string $filename): string
+    {
+        $fingerprint = @hash_file('sha256', $filename);
+        if ($fingerprint === false) {
+            throw new OpenXmlException(sprintf('Unable to fingerprint package "%s".', $filename));
+        }
+
+        return $fingerprint;
     }
 }

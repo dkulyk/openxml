@@ -11,10 +11,16 @@ interface ContainerInterface
 
     public function read(string $name): string;
 
+    /** @return resource */
+    public function openStream(string $name);
+
     /** @return iterable<string> */
     public function entries(): iterable;
 
     public function write(string $name, string $contents): void;
+
+    /** @param resource $stream */
+    public function writeStream(string $name, $stream): void;
 
     public function remove(string $name): void;
 

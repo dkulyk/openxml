@@ -4,9 +4,20 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-02
+
+### Added
+
+- Lazy package opening that retains ZIP entry metadata without loading every part into memory.
+- Public stream APIs for adding, reading, and replacing large binary parts.
+- Temporary-file staging for streamed writes, allowing caller-owned input streams to be closed immediately.
+- ZIP copy-through saves that preserve the compressed representation of unchanged entries.
+- Coverage for binary stream round-trips, stream limits and rollback, lazy memory use, copy-through metadata, and concurrent source changes.
+
 ### Changed
 
 - Updated GitHub Actions to `actions/checkout@v7` and moved Composer validation, PHP CS Fixer, PHPStan, and dependency auditing into a single PHP 8.1 quality job instead of repeating them across the test matrix.
+- Packages now reopen their container after a successful atomic save, keeping lazy reads pinned to the newly written source.
 
 ## [0.3.0] - 2026-09-01
 
@@ -59,7 +70,8 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dkulyk/openxml/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dkulyk/openxml/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/dkulyk/openxml/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/dkulyk/openxml/compare/v0.1.0...v0.2.0
