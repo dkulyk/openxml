@@ -1,8 +1,9 @@
 {
     "name": "dkulyk/openxml",
-    "description": "OPC packaging for Open XML documents",
+    "description": "Read, write, encrypt, and decrypt OPC packages for Office Open XML documents",
     "keywords": [
         "docx",
+        "encryption",
         "office-open-xml",
         "openxml",
         "opc",
