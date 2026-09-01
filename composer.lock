@@ -292,16 +292,16 @@
         },
         {
             "name": "dkulyk/compound-file",
-            "version": "v0.2.0",
+            "version": "v0.2.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/dkulyk/compound-file.git",
-                "reference": "b13986a1b944f00351432969613271a130f13158"
+                "reference": "22f7ac26dc579d9c0710d437a8c3171d04537649"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/dkulyk/compound-file/zipball/b13986a1b944f00351432969613271a130f13158",
-                "reference": "b13986a1b944f00351432969613271a130f13158",
+                "url": "https://api.github.com/repos/dkulyk/compound-file/zipball/22f7ac26dc579d9c0710d437a8c3171d04537649",
+                "reference": "22f7ac26dc579d9c0710d437a8c3171d04537649",
                 "shasum": ""
             },
             "require": {
@@ -336,7 +336,7 @@
                 "issues": "https://github.com/dkulyk/compound-file/issues",
                 "source": "https://github.com/dkulyk/compound-file"
             },
-            "time": "2026-09-01T12:34:08+00:00"
+            "time": "2026-09-01T21:12:59+00:00"
         },
         {
             "name": "ergebnis/agent-detector",
