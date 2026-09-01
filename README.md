@@ -140,6 +140,13 @@ $part->setContentsFromStream($replacement);
 The caller owns streams returned by `openStream()` and must close them. Small
 parts can continue to use `getContents()` and `setContents()`.
 
+`openStream()` returns an independent temporary stream. It remains usable even
+if the package object is later released. For writes, `addPartFromStream()` and
+`setContentsFromStream()` consume the input from its current cursor position to
+EOF, copy it to package-owned temporary storage, and never close the caller's
+resource. The original input may therefore be closed as soon as the method
+returns.
+
 Package and part relationship collections support lookup, filtering, creation,
 and removal. Mutations made through a collection obtained from the package are
 persisted automatically.
@@ -265,6 +272,52 @@ EncryptedOfficeFile::decrypt(
 );
 ```
 
+## Public API reference
+
+### `OpenXmlPackage`
+
+| Method | Description |
+| --- | --- |
+| `create(?PackageLimits $limits = null): self` | Create an empty OPC package. |
+| `open(string $filename, ?PackageLimits $limits = null): self` | Open and validate an OPC ZIP package lazily. |
+| `edit(string $filename, callable $edit, ?PackageLimits $limits = null): void` | Apply an edit and atomically save when the callback succeeds. |
+| `hasPart(string $name): bool` | Check whether a part exists. |
+| `getPart(string $name): PartInterface` | Return a part without loading its contents. |
+| `getParts(): Traversable` | Iterate ordinary package parts. |
+| `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
+| `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
+| `removePart(string $name): void` | Remove a part and its relationship part. |
+| `getRelationships(?string $sourcePartName = null): Relationships` | Read package or part relationships. |
+| `validate(): array` | Return structural issues without saving. |
+| `hasChanges(): bool` | Report whether edits are staged. |
+| `discardChanges(): void` | Restore the source package or reset a new package. |
+| `save(): void` | Atomically replace the opened source. |
+| `saveAs(string $filename): void` | Atomically write to another path. |
+
+### `PartInterface`
+
+| Method | Description |
+| --- | --- |
+| `getName(): string` | Return the normalized absolute part name. |
+| `getContentType(): string` | Return the registered MIME content type. |
+| `getContents(): string` | Materialize and return the complete part. |
+| `setContents(string $contents): void` | Stage complete string contents. |
+| `openStream(): resource` | Return an independent readable temporary stream owned by the caller. |
+| `setContentsFromStream(resource $stream): void` | Stage data from the current cursor to EOF. |
+| `getRelationships(): Relationships` | Return relationships originating at this part. |
+| `addRelationship(...)` | Create an internal or external relationship. |
+| `removeRelationship(string $id): void` | Remove a relationship by ID. |
+
+### Encryption and detection
+
+| API | Description |
+| --- | --- |
+| `OfficeFileDetector::detect(string $filename): OfficeFileFormat` | Identify OPC ZIP, CFBF, encrypted OPC, or unknown input. |
+| `EncryptedOfficeFile::encrypt(...)` | Write Agile AES-256/SHA-512 encryption. |
+| `EncryptedOfficeFile::decrypt(...)` | Atomically decrypt Agile or Standard Encryption into a validated OPC package. |
+| `PackageLimits` | Bound ZIP entries, expanded bytes, ratios, and parsed XML. |
+| `EncryptionLimits` | Bound password work and decrypted output size. |
+
 ## Architecture
 
 ```text
@@ -299,13 +352,25 @@ this package.
 
 ## Development
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete pull-request workflow,
+performance requirements, and compatibility reporting guidance.
+
 ```shell
 composer install
 composer check
+composer benchmark
 ```
 
 The quality pipeline runs Composer validation, PHP CS Fixer, PHPStan at level
-`max` with strict rules, dependency auditing, and PHPUnit on PHP 8.1–8.5.
+`max` with strict rules, dependency auditing, and PHPUnit on PHP 8.1–8.5 plus
+Windows. Weekly, manually dispatchable workflows exercise LibreOffice
+interoperability and publish an observational package benchmark artifact.
+
+Run the optional LibreOffice test locally with:
+
+```shell
+SOFFICE=/path/to/soffice vendor/bin/phpunit tests/LibreOfficeInteropTest.php
+```
 
 ## License
 

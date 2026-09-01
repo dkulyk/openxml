@@ -50,9 +50,9 @@ final class PartName
         }
 
         $source = self::normalize($sourcePartName);
-        $directory = dirname($source);
+        $directory = self::directory($source);
 
-        return ($directory === '/' ? '' : $directory) . '/_rels/' . basename($source) . '.rels';
+        return ($directory === '/' ? '' : $directory) . '/_rels/' . self::filename($source) . '.rels';
     }
 
     public static function isRelationshipsPart(string $name): bool
@@ -71,8 +71,25 @@ final class PartName
             return self::normalize($target);
         }
 
-        $base = $sourcePartName === null ? '/' : dirname(self::normalize($sourcePartName)) . '/';
+        $base = $sourcePartName === null ? '/' : self::directory(self::normalize($sourcePartName)) . '/';
 
         return self::normalize($base . $target);
+    }
+
+    private static function directory(string $name): string
+    {
+        $separator = strrpos($name, '/');
+        if ($separator === false || $separator === 0) {
+            return '/';
+        }
+
+        return substr($name, 0, $separator);
+    }
+
+    private static function filename(string $name): string
+    {
+        $separator = strrpos($name, '/');
+
+        return $separator === false ? $name : substr($name, $separator + 1);
     }
 }

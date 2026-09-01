@@ -96,6 +96,10 @@ final class EncryptedOfficeFileTest extends TestCase
 
         $compoundFile = CompoundFile::open($encrypted);
         $payload = $compoundFile->getStreamContents('EncryptedPackage');
+        // Release the source handle before replacing the same CFBF path. This
+        // is required on Windows and remains compatible with compound-file 0.2.0.
+        unset($compoundFile);
+        gc_collect_cycles();
         $payload[12] = chr(ord($payload[12]) ^ 1);
         CompoundFileWriter::open($encrypted)
             ->setStreamContents('EncryptedPackage', $payload)
