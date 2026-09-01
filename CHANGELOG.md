@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added
+
+- Windows compatibility coverage and weekly, manually dispatchable LibreOffice interoperability and package benchmark workflows.
+- A reproducible lazy-open, streamed-extraction, and ZIP copy-through benchmark.
+- Pull-request, performance-reporting, stream-lifecycle, and compatibility-testing documentation.
+
+### Changed
+
+- CI cancellation now groups repeated pull-request runs by pull-request number.
+
 ## [0.4.0] - 2026-09-02
 
 ### Added

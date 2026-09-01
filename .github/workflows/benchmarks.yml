@@ -1,0 +1,44 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '43 4 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmarks
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Lazy package baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, zip
+          coverage: none
+      - run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Measure package performance
+        run: composer benchmark | tee benchmark.txt
+
+      - name: Publish run summary
+        run: |
+          echo '## OpenXML package benchmark' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat benchmark.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-benchmark-${{ github.sha }}
+          path: benchmark.txt
+          retention-days: 90

@@ -45,11 +45,14 @@
     },
     "scripts": {
         "test": "phpunit",
+        "benchmark": "php tools/benchmark.php",
+        "lint": "php tools/lint.php",
         "analyse": "phpstan analyse --no-progress --debug --memory-limit=512M",
         "format": "php-cs-fixer fix --sequential --allow-unsupported-php-version=yes --verbose",
         "check-style": "php-cs-fixer fix --sequential --allow-unsupported-php-version=yes --dry-run --diff --verbose",
         "check": [
             "@validate-composer",
+            "@lint",
             "@check-style",
             "@analyse",
             "@test"
