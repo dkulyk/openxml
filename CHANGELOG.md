@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-01
+
 ### Added
 
 - File-signature detection for OPC ZIP, CFBF/OLE, encrypted Office Open XML, and unknown files.
@@ -34,5 +36,6 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dkulyk/openxml/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dkulyk/openxml/releases/tag/v0.1.0

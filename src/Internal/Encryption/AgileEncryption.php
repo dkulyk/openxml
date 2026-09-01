@@ -17,6 +17,8 @@ final class AgileEncryption
     private const SALT_SIZE = 16;
     private const SEGMENT_SIZE = 4096;
 
+    // MS-OFFCRYPTO assigns these fixed block keys to separate password-derived
+    // keys for the verifier, package key, and integrity values.
     private const VERIFIER_BLOCK = "\xFE\xA7\xD2\x76\x3B\x4B\x9E\x79";
     private const VERIFIER_HASH_BLOCK = "\xD7\xAA\x0F\x6D\x30\x61\x34\x4E";
     private const KEY_BLOCK = "\x14\x6E\x0B\xE7\xAB\xAC\xD0\xD6";
@@ -59,6 +61,8 @@ final class AgileEncryption
 
         $sizeHeader = self::packUInt64($metadata['size']);
         self::write($destination, $sizeHeader);
+        // The integrity message is the complete EncryptedPackage stream,
+        // including its eight-byte plaintext-size header.
         $hmac = hash_init('sha512', HASH_HMAC, $hmacKey = random_bytes(self::HASH_SIZE));
         hash_update($hmac, $sizeHeader);
 
@@ -73,6 +77,8 @@ final class AgileEncryption
                 break;
             }
 
+            // Each 4096-byte segment gets an independent IV derived from its
+            // zero-based little-endian segment number.
             $cipherText = self::encryptBlock(
                 self::zeroPad($plainText),
                 $secretKey,

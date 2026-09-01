@@ -20,6 +20,7 @@ use DK\OpenXml\OpenXmlPackage;
 
 final class EncryptedOfficeFile
 {
+    /** Encrypts an existing OPC package as an AES-256/SHA-512 Agile Office file. */
     public static function encrypt(
         string $source,
         string $destination,
@@ -73,6 +74,7 @@ final class EncryptedOfficeFile
         }
     }
 
+    /** Decrypts an Agile Office file and atomically writes a validated OPC package. */
     public static function decrypt(
         string $source,
         string $destination,
@@ -115,7 +117,9 @@ final class EncryptedOfficeFile
                     $destinationStream,
                     $limits->maximumDecryptedBytes,
                 );
-                fflush($destinationStream);
+                if (!fflush($destinationStream)) {
+                    throw new InvalidEncryptedPackageException('Unable to flush the decrypted package.');
+                }
             } finally {
                 fclose($destinationStream);
             }

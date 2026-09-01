@@ -6,6 +6,7 @@ namespace DK\OpenXml\Encryption;
 
 final class EncryptionLimits
 {
+    /** Limits attacker-controlled work and output when decrypting untrusted files. */
     public function __construct(
         public readonly int $maximumSpinCount = 1_000_000,
         public readonly int $maximumDecryptedBytes = 1_073_741_824,

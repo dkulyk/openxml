@@ -9,6 +9,7 @@ use DK\CompoundFile\CompoundFileWriter;
 /** @internal */
 final class DataSpaces
 {
+    /** Adds the MS-OFFCRYPTO DataSpaces metadata expected by Office consumers. */
     public static function addTo(CompoundFileWriter $writer): void
     {
         $root = "\x06DataSpaces";
@@ -52,6 +53,8 @@ final class DataSpaces
 
     private static function unicode(string $value): string
     {
+        // UNICODE-LP-P4 stores a byte length followed by UTF-16LE data padded
+        // to a four-byte boundary, without a null terminator.
         $utf16 = mb_convert_encoding($value, 'UTF-16LE', 'UTF-8');
         $encoded = pack('V', strlen($utf16)) . $utf16;
 
