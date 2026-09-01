@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-01
+
+### Changed
+
+- Reorganized the README around installation and common package workflows.
+- Added Packagist, PHP, CI, downloads, and license badges.
+- Updated Composer metadata to describe encryption and decryption support.
+
 ## [0.2.0] - 2026-09-01
 
 ### Added
@@ -36,6 +44,7 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/dkulyk/openxml/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/dkulyk/openxml/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dkulyk/openxml/releases/tag/v0.1.0
