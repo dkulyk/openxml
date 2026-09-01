@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-01
+
+### Added
+
+- Read-only ECMA-376 Standard Encryption support with automatic version detection, AES-128/192/256, SHA-1 password verification, and the fixed 50,000-iteration work factor.
+- Compatibility coverage for all Standard AES key sizes, wrong passwords, and configured work limits; independently verified byte-for-byte against the public `msoffcrypto-tool` fixture.
+
+### Changed
+
+- `EncryptedOfficeFile::decrypt()` now transparently routes Agile and Standard encrypted OOXML files while encryption continues to produce modern Agile files only.
+
 ## [0.2.1] - 2026-09-01
 
 ### Changed
@@ -44,7 +55,8 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dkulyk/openxml/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/dkulyk/openxml/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/dkulyk/openxml/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dkulyk/openxml/releases/tag/v0.1.0

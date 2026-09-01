@@ -162,7 +162,8 @@ through to a generic ZIP error.
 
 The encryption API writes ECMA-376 Agile Encryption with AES-256-CBC, SHA-512,
 a 100,000-iteration password hash, random salts, password verification, and an
-integrity HMAC.
+integrity HMAC. Decryption automatically recognizes both modern Agile files and
+older Standard Encryption files using AES-128, AES-192, or AES-256 with SHA-1.
 
 ```php
 use DK\OpenXml\Encryption\EncryptedOfficeFile;
@@ -184,8 +185,10 @@ Payloads are processed in 4096-byte segments. A destination is replaced only
 after encryption, integrity, and OPC validation succeed. A wrong password or
 modified ciphertext leaves an existing destination untouched.
 
-Only Agile Encryption with AES-256-CBC and SHA-512 is currently accepted.
-Standard, Extensible, RC4, and legacy binary Office encryption are not supported.
+New encrypted files always use Agile Encryption. Standard Encryption is read-only
+compatibility support because it lacks Agile's authenticated integrity metadata.
+Extensible Encryption, RC4, XOR obfuscation, and encrypted legacy binary Office
+formats (`.doc`, `.xls`, and `.ppt`) are not supported.
 
 ## Processing untrusted files
 
@@ -233,8 +236,9 @@ DK\OpenXml\OpenXmlPackage
     └── Internal\Container\ZipContainer
 
 DK\OpenXml\Encryption\EncryptedOfficeFile
-└── Internal\Encryption\AgileEncryption
-    └── dkulyk/compound-file (optional CFBF integration)
+├── Internal\Encryption\AgileEncryption (read/write)
+├── Internal\Encryption\StandardEncryption (read-only)
+└── dkulyk/compound-file (optional CFBF integration)
 ```
 
 `Packaging` is the public OPC API. ZIP remains behind an internal container

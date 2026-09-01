@@ -14,6 +14,9 @@ use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Encryption\AgileEncryption;
 use DK\OpenXml\Internal\Encryption\AgileEncryptionInfo;
 use DK\OpenXml\Internal\Encryption\DataSpaces;
+use DK\OpenXml\Internal\Encryption\EncryptionInfoReader;
+use DK\OpenXml\Internal\Encryption\StandardEncryption;
+use DK\OpenXml\Internal\Encryption\StandardEncryptionInfo;
 use DK\OpenXml\OfficeFileDetector;
 use DK\OpenXml\OfficeFileFormat;
 use DK\OpenXml\OpenXmlPackage;
@@ -74,7 +77,7 @@ final class EncryptedOfficeFile
         }
     }
 
-    /** Decrypts an Agile Office file and atomically writes a validated OPC package. */
+    /** Decrypts an Agile or Standard Office file and atomically writes a validated OPC package. */
     public static function decrypt(
         string $source,
         string $destination,
@@ -93,7 +96,7 @@ final class EncryptedOfficeFile
         }
 
         $compoundFile = CompoundFile::open($source);
-        $info = AgileEncryptionInfo::fromStream(
+        $info = EncryptionInfoReader::read(
             $compoundFile->getStreamContents('EncryptionInfo'),
             $limits->maximumSpinCount,
         );
@@ -110,13 +113,23 @@ final class EncryptedOfficeFile
             }
 
             try {
-                AgileEncryption::decrypt(
-                    $compoundFile->openStream('EncryptedPackage'),
-                    $info,
-                    $password,
-                    $destinationStream,
-                    $limits->maximumDecryptedBytes,
-                );
+                if ($info instanceof AgileEncryptionInfo) {
+                    AgileEncryption::decrypt(
+                        $compoundFile->openStream('EncryptedPackage'),
+                        $info,
+                        $password,
+                        $destinationStream,
+                        $limits->maximumDecryptedBytes,
+                    );
+                } elseif ($info instanceof StandardEncryptionInfo) {
+                    StandardEncryption::decrypt(
+                        $compoundFile->openStream('EncryptedPackage'),
+                        $info,
+                        $password,
+                        $destinationStream,
+                        $limits->maximumDecryptedBytes,
+                    );
+                }
                 if (!fflush($destinationStream)) {
                     throw new InvalidEncryptedPackageException('Unable to flush the decrypted package.');
                 }
