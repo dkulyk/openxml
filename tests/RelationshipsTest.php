@@ -12,6 +12,14 @@ use PHPUnit\Framework\TestCase;
 
 final class RelationshipsTest extends TestCase
 {
+    public function testPartUriOperationsUseOpcSeparators(): void
+    {
+        self::assertSame('/word/_rels/document.xml.rels', PartName::relationshipsName('/word/document.xml'));
+        self::assertSame('/_rels/document.xml.rels', PartName::relationshipsName('/document.xml'));
+        self::assertSame('/word/media/image.png', PartName::resolveTarget('/word/document.xml', 'media/image.png'));
+        self::assertSame('/styles.xml', PartName::resolveTarget('/document.xml', 'styles.xml'));
+    }
+
     public function testRoundTripAndLookup(): void
     {
         $items = new Relationships();

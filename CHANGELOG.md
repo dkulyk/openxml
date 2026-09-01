@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file. The format 
 
 - CI cancellation now groups repeated pull-request runs by pull-request number.
 
+### Fixed
+
+- OPC relationship-part names and relative targets now use `/` separators independently of the host operating system.
+
 ## [0.4.0] - 2026-09-02
 
 ### Added
