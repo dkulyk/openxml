@@ -1,0 +1,55 @@
+# Architecture
+
+The public surface follows Open Packaging Conventions terminology. ZIP and CFBF
+are storage mechanisms rather than domain concepts exposed to package consumers.
+
+```text
+DK\OpenXml\OpenXmlPackage
+├── Packaging\PackageInterface
+├── Packaging\PartInterface / Part
+├── Packaging\Relationships / RelationshipInterface
+├── Packaging\ContentTypes
+└── Internal\Container\ContainerInterface
+    └── Internal\Container\ZipContainer
+
+DK\OpenXml\Encryption\EncryptedOfficeFile
+├── Internal\Encryption\AgileEncryption (read/write)
+├── Internal\Encryption\StandardEncryption (read-only)
+└── dkulyk/compound-file (optional CFBF integration)
+```
+
+## Packaging boundary
+
+`Packaging` is the public OPC API. `Internal\Container` hides ZIP implementation
+details and is not a compatibility surface. The container retains entry metadata
+when opening a package and loads content only when requested.
+
+Streamed writes are staged in temporary storage. Unchanged entries use ZIP
+copy-through, preserving their compressed representation during a save. Complete
+output is validated in a same-directory temporary file before atomic replacement.
+
+The internal boundary allows container infrastructure to move into a shared
+package later if ODF or another format demonstrates a real common abstraction. No
+separate generic ZIP package is needed today.
+
+## Domain boundary
+
+This library owns OPC concerns only:
+
+- package parts and part names;
+- content-type declarations;
+- package and part relationships;
+- container safety, persistence, and Office encryption.
+
+WordprocessingML, SpreadsheetML, and PresentationML object models belong in
+specialized libraries built on top of this package. Resource deduplication also
+remains outside the default package behavior until its relationship and semantic
+policies are defined.
+
+## Current limitations
+
+- `getContents()` materializes a complete part; use `openStream()` for large payloads.
+- Encrypted documents must be decrypted before opening them as OPC.
+- Digitally signed packages cannot be saved because signatures are not preserved.
+- Atomic replacement requires same-directory rename support from the filesystem.
+- Validation covers OPC structure, not the schemas of Office XML vocabularies.

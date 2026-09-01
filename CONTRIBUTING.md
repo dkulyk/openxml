@@ -68,7 +68,9 @@ and Windows. Merge only after all required checks pass.
 ## Public API
 
 Keep ZIP details inside `Internal`. New public APIs should use OPC vocabulary,
-remain compatible with PHP 8.1+, and be documented in the README.
+remain compatible with PHP 8.1+, and be documented on the relevant page in
+`docs/`. Keep the README focused on installation, a working quick start, and
+documentation navigation.
 Backward-incompatible changes require an explicit release decision.
 
 Document stream ownership explicitly. A method must state whether it consumes
