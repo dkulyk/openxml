@@ -41,6 +41,8 @@ All notable changes to this project will be documented in this file. The format 
 ### Fixed
 
 - OPC relationship-part names and relative targets now use `/` separators independently of the host operating system.
+- Saving after moving a part onto the name of a removed part no longer fails with a ZIP rename error.
+- Packages saved to a new path now receive the permissions a regular file create would give under the current umask instead of `0600`.
 
 ## [0.4.0] - 2026-09-02
 

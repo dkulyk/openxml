@@ -57,11 +57,9 @@ final class AtomicFileWriter
 
     private static function preservePermissions(string $source, string $temporaryFile): void
     {
-        if (!is_file($source)) {
-            return;
-        }
-
-        $permissions = fileperms($source);
+        // tempnam() creates 0600 files; a new destination should get the
+        // permissions a regular create would, an existing one keeps its own.
+        $permissions = is_file($source) ? fileperms($source) : 0666 & ~umask();
         if ($permissions !== false) {
             @chmod($temporaryFile, $permissions & 0777);
         }

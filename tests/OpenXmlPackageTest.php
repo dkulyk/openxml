@@ -395,6 +395,40 @@ final class OpenXmlPackageTest extends TestCase
         self::assertFalse(OpenXmlPackage::open($this->filename)->hasPart('/media/source.bin'));
     }
 
+    public function testPartCanBeMovedOntoTheNameOfARemovedPartAndSaved(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/source.xml', 'application/xml', 'source');
+        $package->addPart('/destination.xml', 'application/xml', 'destination');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $package->removePart('/destination.xml');
+        $package->movePart('/source.xml', '/destination.xml');
+        $package->save();
+
+        $reopened = OpenXmlPackage::open($this->filename);
+        self::assertFalse($reopened->hasPart('/source.xml'));
+        self::assertSame('source', $reopened->getPart('/destination.xml')->getContents());
+    }
+
+    public function testSavingToANewPathUsesUmaskPermissions(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::markTestSkipped('POSIX permissions are not applicable on Windows.');
+        }
+        unlink($this->filename);
+        $previousUmask = umask(022);
+
+        try {
+            $this->createSavedPackage('document');
+        } finally {
+            umask($previousUmask);
+        }
+
+        self::assertSame(0644, fileperms($this->filename) & 0777);
+    }
+
     public function testMovingPartToExistingDestinationIsRejectedWithoutChanges(): void
     {
         $package = OpenXmlPackage::create();
