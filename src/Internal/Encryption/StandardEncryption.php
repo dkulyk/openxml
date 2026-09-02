@@ -7,7 +7,6 @@ namespace DK\OpenXml\Internal\Encryption;
 use DK\CompoundFile\Stream;
 use DK\OpenXml\Exception\InvalidEncryptedPackageException;
 use DK\OpenXml\Exception\InvalidPasswordException;
-use DK\OpenXml\Exception\MissingDependencyException;
 use DK\OpenXml\Internal\UnsignedInteger;
 
 /** @internal ECMA-376 Standard Encryption reader (AES/SHA-1). */
@@ -25,7 +24,7 @@ final class StandardEncryption
         $destination,
         int $maximumBytes,
     ): void {
-        self::assertOpenSsl();
+        EncryptedPackageIo::assertOpenSsl();
         $key = self::deriveKey($password, $info->salt, intdiv($info->keyBits, 8));
         $verifier = self::decryptBlock($info->encryptedVerifier, $key, $info->keyBits);
         $verifierHash = self::decryptBlock($info->encryptedVerifierHash, $key, $info->keyBits);
@@ -36,7 +35,7 @@ final class StandardEncryption
         if (!$encryptedPackage->seek(0)) {
             throw new InvalidEncryptedPackageException('Unable to rewind the EncryptedPackage stream.');
         }
-        $plainTextSize = self::unpackUInt64(self::readExactly($encryptedPackage, 8));
+        $plainTextSize = UnsignedInteger::decode64BitLittleEndian(EncryptedPackageIo::readExactly($encryptedPackage, 8));
         if ($plainTextSize > $maximumBytes) {
             throw new InvalidEncryptedPackageException(sprintf(
                 'Decrypted package size %d exceeds the configured maximum of %d bytes.',
@@ -45,7 +44,7 @@ final class StandardEncryption
             ));
         }
 
-        $cipherTextBytes = self::roundUp($plainTextSize, self::BLOCK_SIZE);
+        $cipherTextBytes = EncryptedPackageIo::roundUp($plainTextSize, self::BLOCK_SIZE);
         if ($encryptedPackage->getSize() !== 8 + $cipherTextBytes) {
             throw new InvalidEncryptedPackageException('EncryptedPackage size does not match its declared plaintext size.');
         }
@@ -54,11 +53,11 @@ final class StandardEncryption
         while ($cipherTextBytes > 0) {
             $chunkSize = min(65_536, $cipherTextBytes);
             $plainText = self::decryptBlock(
-                self::readExactly($encryptedPackage, $chunkSize),
+                EncryptedPackageIo::readExactly($encryptedPackage, $chunkSize),
                 $key,
                 $info->keyBits,
             );
-            self::write($destination, substr($plainText, 0, min($remaining, strlen($plainText))));
+            EncryptedPackageIo::write($destination, substr($plainText, 0, min($remaining, strlen($plainText))));
             $remaining -= min($remaining, strlen($plainText));
             $cipherTextBytes -= $chunkSize;
         }
@@ -96,45 +95,5 @@ final class StandardEncryption
         }
 
         return $result;
-    }
-
-    private static function unpackUInt64(string $value): int
-    {
-        return UnsignedInteger::decode64BitLittleEndian($value);
-    }
-
-    private static function roundUp(int $value, int $multiple): int
-    {
-        return $value === 0 ? 0 : intdiv($value + $multiple - 1, $multiple) * $multiple;
-    }
-
-    private static function readExactly(Stream $stream, int $bytes): string
-    {
-        $contents = $stream->read($bytes);
-        if (strlen($contents) !== $bytes) {
-            throw new InvalidEncryptedPackageException('EncryptedPackage ended unexpectedly.');
-        }
-
-        return $contents;
-    }
-
-    /** @param resource $stream */
-    private static function write($stream, string $contents): void
-    {
-        $offset = 0;
-        while ($offset < strlen($contents)) {
-            $written = fwrite($stream, substr($contents, $offset));
-            if ($written === false || $written === 0) {
-                throw new InvalidEncryptedPackageException('Unable to write decrypted Office data.');
-            }
-            $offset += $written;
-        }
-    }
-
-    private static function assertOpenSsl(): void
-    {
-        if (!extension_loaded('openssl')) {
-            throw new MissingDependencyException('Office encryption requires the OpenSSL PHP extension.');
-        }
     }
 }
