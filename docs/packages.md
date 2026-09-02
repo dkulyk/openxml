@@ -4,6 +4,13 @@
 XLSX, and PPTX: parts, content types, and relationships. It deliberately does not
 interpret the XML vocabulary inside a part.
 
+Part names are strict absolute OPC IRIs such as `/word/document.xml`. Empty or
+dot segments, trailing dots, malformed or aliasing percent encodings, query
+strings, and fragments are rejected rather than silently normalized. Part-name
+lookup and collision detection use the ASCII-case-insensitive equivalence rules
+defined by OPC. Relative relationship targets remain valid and are resolved using
+their source part as the base.
+
 ## Reading parts and relationships
 
 ```php

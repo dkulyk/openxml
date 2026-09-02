@@ -98,7 +98,7 @@ final class PackageRepairer
     {
         return $options->removeOrphanRelationshipParts
             && $sourcePartName !== null
-            && !$this->container->has(PartName::entry($sourcePartName));
+            && !$this->hasPart($sourcePartName);
     }
 
     /** @param list<RepairAction> $actions */
@@ -112,7 +112,7 @@ final class PackageRepairer
         }
 
         foreach ($this->contentTypes->getOverrides() as $partName => $_contentType) {
-            if ($this->container->has(PartName::entry($partName))) {
+            if ($this->hasPart($partName)) {
                 continue;
             }
 
@@ -171,7 +171,7 @@ final class PackageRepairer
                     continue;
                 }
 
-                if ($options->removeDanglingRelationships && !$this->container->has(PartName::entry($targetPartName))) {
+                if ($options->removeDanglingRelationships && !$this->hasPart($targetPartName)) {
                     $remove[] = $relationship->getId();
                     $actions[] = new RepairAction(
                         RepairAction::REMOVE_DANGLING_RELATIONSHIP,
@@ -192,5 +192,16 @@ final class PackageRepairer
                 }
             }
         }
+    }
+
+    private function hasPart(string $name): bool
+    {
+        foreach ($this->container->entries() as $entryName) {
+            if ($entryName !== '[Content_Types].xml' && PartName::equivalent('/' . $entryName, $name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

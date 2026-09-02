@@ -17,6 +17,9 @@ final class ContentTypes
     /** @var array<string, string> */
     private array $overrides = [];
 
+    /** @var array<string, string> Lowercase part name => stored part name. */
+    private array $overrideNames = [];
+
     public static function fromXml(
         string $xml,
         int $maximumXmlBytes = XmlDocument::DEFAULT_MAXIMUM_BYTES,
@@ -45,10 +48,11 @@ final class ContentTypes
         $seenOverrides = [];
         foreach ($document->getElementsByTagNameNS(self::XML_NAMESPACE, 'Override') as $node) {
             $partName = PartName::normalize($node->getAttribute('PartName'));
-            if (isset($seenOverrides[$partName])) {
+            $comparisonKey = strtolower($partName);
+            if (isset($seenOverrides[$comparisonKey])) {
                 throw new OpenXmlException(sprintf('Duplicate content type override for "%s".', $partName));
             }
-            $seenOverrides[$partName] = true;
+            $seenOverrides[$comparisonKey] = true;
             $types->setOverride(
                 $partName,
                 $node->getAttribute('ContentType'),
@@ -61,8 +65,9 @@ final class ContentTypes
     public function getForPart(string $name): ?string
     {
         $name = PartName::normalize($name);
-        if (isset($this->overrides[$name])) {
-            return $this->overrides[$name];
+        $storedName = $this->overrideNames[strtolower($name)] ?? null;
+        if ($storedName !== null) {
+            return $this->overrides[$storedName];
         }
 
         $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
@@ -86,12 +91,20 @@ final class ContentTypes
             throw new OpenXmlException('Content type must not be empty.');
         }
 
-        $this->overrides[PartName::normalize($name)] = $contentType;
+        $name = PartName::normalize($name);
+        $this->removeOverride($name);
+        $this->overrides[$name] = $contentType;
+        $this->overrideNames[strtolower($name)] = $name;
     }
 
     public function removeOverride(string $name): void
     {
-        unset($this->overrides[PartName::normalize($name)]);
+        $name = PartName::normalize($name);
+        $comparisonKey = strtolower($name);
+        $storedName = $this->overrideNames[$comparisonKey] ?? null;
+        if ($storedName !== null) {
+            unset($this->overrides[$storedName], $this->overrideNames[$comparisonKey]);
+        }
     }
 
     /** @return array<string, string> */

@@ -24,7 +24,8 @@ $package = OpenXmlPackage::open('upload.docx', new PackageLimits(
 
 The package reader rejects unsafe and duplicate ZIP names, suspicious expansion
 ratios, DTDs, malformed content-type and relationship XML, and data beyond the
-configured limits.
+configured limits. It also rejects case-equivalent part names, names derivable
+from another part name, and percent-encoded aliases before part contents are read.
 
 ## Encryption limits
 

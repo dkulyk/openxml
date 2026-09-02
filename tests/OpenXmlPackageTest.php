@@ -72,6 +72,50 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame('new', $package->getPart('/doc.xml')->getContents());
     }
 
+    public function testPartLookupAndRelationshipsUseAsciiCaseInsensitiveEquivalence(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/Word/Document.XML', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'word/document.xml');
+
+        self::assertTrue($package->hasPart('/word/document.xml'));
+        self::assertSame('/Word/Document.XML', $package->getPart('/WORD/DOCUMENT.xml')->getName());
+        self::assertSame('<document/>', $package->getPart('/word/document.xml')->getContents());
+        self::assertSame('/word/document.xml', $package->getRelationships()->get('rId1')->getTargetPartName());
+        self::assertNotNull($package->getRelationships()->get('rId1')->getTargetPart());
+        self::assertSame([], $package->validate());
+    }
+
+    public function testEquivalentOrDerivedPartNamesCannotBeAdded(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/custom/data.xml', 'application/xml', 'data');
+
+        foreach (['/CUSTOM/DATA.XML', '/custom', '/custom/data.xml/child'] as $conflictingName) {
+            try {
+                $package->addPart($conflictingName, 'application/xml', 'conflict');
+                self::fail(sprintf('Part name "%s" was expected to conflict.', $conflictingName));
+            } catch (OpenXmlException $exception) {
+                self::assertStringContainsString('conflicts', $exception->getMessage());
+            }
+        }
+
+        self::assertCount(1, iterator_to_array($package->getParts()));
+    }
+
+    public function testRelationshipPartsRemainIndexedForPackageValidation(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/word/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'word/document.xml');
+        $package->addRelationship('urn:image', 'media/image.png', sourcePartName: '/word/document.xml');
+        $package->addPart('/word/media/image.png', 'image/png', 'image');
+
+        self::assertTrue($package->hasPart('/_RELS/.RELS'));
+        self::assertTrue($package->hasPart('/WORD/_RELS/DOCUMENT.XML.RELS'));
+        self::assertSame([], $package->validate());
+    }
+
     public function testPartCanBeAddedAndReadAsAStream(): void
     {
         $source = tmpfile();

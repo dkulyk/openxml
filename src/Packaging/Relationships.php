@@ -160,7 +160,7 @@ final class Relationships implements \IteratorAggregate, \Countable
         $matching = array_filter(
             $this->relationships,
             static fn(RelationshipInterface $relationship): bool => !$relationship->isExternal()
-                && $relationship->getTargetPartName() === $partName,
+                && PartName::equivalent((string) $relationship->getTargetPartName(), $partName),
         );
 
         return array_values($matching);

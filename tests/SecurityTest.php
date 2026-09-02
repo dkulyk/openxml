@@ -98,6 +98,38 @@ final class SecurityTest extends TestCase
         OpenXmlPackage::open($this->filename);
     }
 
+    /** @dataProvider conflictingZipPartNamesProvider */
+    public function testConflictingOpcPartNamesInZipAreRejected(string $first, string $second): void
+    {
+        $this->writeZip([
+            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+            $first => 'first',
+            $second => 'second',
+        ]);
+
+        $this->expectException(OpenXmlException::class);
+        OpenXmlPackage::open($this->filename);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function conflictingZipPartNamesProvider(): iterable
+    {
+        yield 'ASCII case-equivalent' => ['word/document.xml', 'WORD/DOCUMENT.XML'];
+        yield 'derived prefix' => ['custom/data.xml', 'custom/data.xml/child'];
+    }
+
+    public function testInvalidOpcPartNameInZipIsRejected(): void
+    {
+        $this->writeZip([
+            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+            'word/document.' => 'invalid',
+        ]);
+
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Invalid OPC part name');
+        OpenXmlPackage::open($this->filename);
+    }
+
     public function testSuspiciousCompressionRatioIsRejectedBeforeExtraction(): void
     {
         $this->writeZip(['large.txt' => str_repeat('A', 100_000)]);

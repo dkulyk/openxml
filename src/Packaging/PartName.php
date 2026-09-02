@@ -12,30 +12,23 @@ final class PartName
 
     public static function normalize(string $name): string
     {
-        if ($name === '' || str_contains($name, '\\') || str_contains($name, '#') || str_contains($name, '?')) {
+        if (
+            $name === ''
+            || !str_starts_with($name, '/')
+            || str_ends_with($name, '/')
+            || str_contains($name, '\\')
+            || str_contains($name, '#')
+            || str_contains($name, '?')
+            || preg_match('//u', $name) !== 1
+        ) {
             throw new OpenXmlException(sprintf('Invalid OPC part name "%s".', $name));
         }
 
-        $segments = [];
-        foreach (explode('/', '/' . ltrim($name, '/')) as $segment) {
-            if ($segment === '' || $segment === '.') {
-                continue;
-            }
-            if ($segment === '..') {
-                if ($segments === []) {
-                    throw new OpenXmlException(sprintf('Part name escapes the package root: "%s".', $name));
-                }
-                array_pop($segments);
-
-                continue;
-            }
-            $segments[] = $segment;
-        }
-        if ($segments === []) {
-            throw new OpenXmlException(sprintf('Invalid OPC part name "%s".', $name));
+        foreach (explode('/', substr($name, 1)) as $segment) {
+            self::validateSegment($segment, $name);
         }
 
-        return '/' . implode('/', $segments);
+        return $name;
     }
 
     public static function entry(string $name): string
@@ -78,16 +71,38 @@ final class PartName
 
     public static function resolveTarget(?string $sourcePartName, string $target): string
     {
-        if ($target === '' || str_contains($target, '#') || str_contains($target, '?')) {
+        if (
+            $target === ''
+            || str_contains($target, '\\')
+            || str_contains($target, '#')
+            || str_contains($target, '?')
+            || preg_match('//u', $target) !== 1
+            || (!str_starts_with($target, '/') && preg_match('/^[A-Za-z][A-Za-z0-9+.-]*:/', $target) === 1)
+        ) {
             throw new OpenXmlException(sprintf('Invalid internal relationship target "%s".', $target));
         }
-        if (str_starts_with($target, '/')) {
-            return self::normalize($target);
+
+        $segments = str_starts_with($target, '/')
+            ? []
+            : self::directorySegments($sourcePartName);
+
+        foreach (explode('/', ltrim($target, '/')) as $segment) {
+            if ($segment === '.') {
+                continue;
+            }
+            if ($segment === '..') {
+                if ($segments === []) {
+                    throw new OpenXmlException(sprintf('Relationship target escapes the package root: "%s".', $target));
+                }
+                array_pop($segments);
+
+                continue;
+            }
+
+            $segments[] = $segment;
         }
 
-        $base = $sourcePartName === null ? '/' : self::directory(self::normalize($sourcePartName)) . '/';
-
-        return self::normalize($base . $target);
+        return self::normalize('/' . implode('/', $segments));
     }
 
     public static function relativeTarget(?string $sourcePartName, string $targetPartName): string
@@ -106,6 +121,75 @@ final class PartName
         }
 
         return str_repeat('../', count($sourceSegments)) . implode('/', $targetSegments);
+    }
+
+    public static function conflicts(string $first, string $second): bool
+    {
+        $first = self::comparisonKey(self::normalize($first));
+        $second = self::comparisonKey(self::normalize($second));
+
+        return $first === $second
+            || str_starts_with($first, $second . '/')
+            || str_starts_with($second, $first . '/');
+    }
+
+    public static function equivalent(string $first, string $second): bool
+    {
+        return self::comparisonKey(self::normalize($first)) === self::comparisonKey(self::normalize($second));
+    }
+
+    /** @return list<string> */
+    private static function directorySegments(?string $sourcePartName): array
+    {
+        if ($sourcePartName === null) {
+            return [];
+        }
+
+        $directory = trim(self::directory(self::normalize($sourcePartName)), '/');
+
+        return $directory === '' ? [] : explode('/', $directory);
+    }
+
+    private static function comparisonKey(string $name): string
+    {
+        return strtolower($name);
+    }
+
+    private static function validateSegment(string $segment, string $name): void
+    {
+        if (
+            $segment === ''
+            || str_ends_with($segment, '.')
+            || preg_match('/%(?![0-9A-Fa-f]{2})/', $segment) === 1
+            || self::hasForbiddenPercentEncoding($segment)
+            || preg_match(
+                "/\\A(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@%]|[^\\x00-\\x7F\\p{Z}\\p{C}])+\\z/u",
+                $segment,
+            ) !== 1
+        ) {
+            throw new OpenXmlException(sprintf('Invalid OPC part name "%s".', $name));
+        }
+    }
+
+    private static function hasForbiddenPercentEncoding(string $segment): bool
+    {
+        preg_match_all('/%[0-9A-Fa-f]{2}/', $segment, $matches);
+        foreach ($matches[0] as $encoding) {
+            $byte = hexdec(substr($encoding, 1));
+            if (
+                $byte >= 0x80
+                || $byte === 0x2F
+                || $byte === 0x5C
+                || $byte >= 0x30 && $byte <= 0x39
+                || $byte >= 0x41 && $byte <= 0x5A
+                || $byte >= 0x61 && $byte <= 0x7A
+                || in_array($byte, [0x2D, 0x2E, 0x5F, 0x7E], true)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function directory(string $name): string
