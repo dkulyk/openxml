@@ -7,6 +7,7 @@ namespace DK\OpenXml\Internal\Encryption;
 use DK\CompoundFile\Stream;
 use DK\OpenXml\Exception\InvalidEncryptedPackageException;
 use DK\OpenXml\Exception\InvalidPasswordException;
+use DK\OpenXml\Internal\UnsignedInteger;
 
 /** @internal */
 final class AgileEncryption
@@ -125,26 +126,41 @@ final class AgileEncryption
         int $maximumBytes,
     ): void {
         self::assertOpenSsl();
-        $passwordHash = self::passwordHash($password, $info->passwordSalt, $info->spinCount);
+        $passwordHash = self::passwordHash(
+            $password,
+            $info->passwordSalt,
+            $info->spinCount,
+            $info->hashAlgorithm,
+        );
         $verifier = self::decryptBlock(
             $info->encryptedVerifier,
-            self::deriveKey($passwordHash, self::VERIFIER_BLOCK),
+            self::deriveKey($passwordHash, self::VERIFIER_BLOCK, $info->hashAlgorithm, $info->keyBits),
             $info->passwordSalt,
+            $info->keyBits,
         );
         $expectedVerifierHash = self::decryptBlock(
             $info->encryptedVerifierHash,
-            self::deriveKey($passwordHash, self::VERIFIER_HASH_BLOCK),
+            self::deriveKey($passwordHash, self::VERIFIER_HASH_BLOCK, $info->hashAlgorithm, $info->keyBits),
             $info->passwordSalt,
+            $info->keyBits,
         );
 
-        if (!hash_equals($expectedVerifierHash, hash('sha512', $verifier, true))) {
+        if (!hash_equals(
+            substr($expectedVerifierHash, 0, $info->hashSize),
+            hash($info->hashAlgorithm, $verifier, true),
+        )) {
             throw new InvalidPasswordException('The password for the encrypted Office file is incorrect.');
         }
 
-        $secretKey = self::decryptBlock(
-            $info->encryptedKey,
-            self::deriveKey($passwordHash, self::KEY_BLOCK),
-            $info->passwordSalt,
+        $secretKey = substr(
+            self::decryptBlock(
+                $info->encryptedKey,
+                self::deriveKey($passwordHash, self::KEY_BLOCK, $info->hashAlgorithm, $info->keyBits),
+                $info->passwordSalt,
+                $info->keyBits,
+            ),
+            0,
+            intdiv($info->keyBits, 8),
         );
         self::verifyIntegrity($encryptedPackage, $info, $secretKey);
 
@@ -176,7 +192,8 @@ final class AgileEncryption
             $plainText = self::decryptBlock(
                 self::readExactly($encryptedPackage, $cipherTextBytes),
                 $secretKey,
-                self::initializationVector($info->keyDataSalt, pack('V', $segment)),
+                self::initializationVector($info->keyDataSalt, pack('V', $segment), $info->hashAlgorithm),
+                $info->keyBits,
             );
             self::write($destination, substr($plainText, 0, min($remaining, strlen($plainText))));
             $remaining -= min($remaining, strlen($plainText));
@@ -190,18 +207,20 @@ final class AgileEncryption
         $hmacKey = self::decryptBlock(
             $info->encryptedHmacKey,
             $secretKey,
-            self::initializationVector($info->keyDataSalt, self::HMAC_KEY_BLOCK),
+            self::initializationVector($info->keyDataSalt, self::HMAC_KEY_BLOCK, $info->hashAlgorithm),
+            $info->keyBits,
         );
         $expectedHmac = self::decryptBlock(
             $info->encryptedHmacValue,
             $secretKey,
-            self::initializationVector($info->keyDataSalt, self::HMAC_VALUE_BLOCK),
+            self::initializationVector($info->keyDataSalt, self::HMAC_VALUE_BLOCK, $info->hashAlgorithm),
+            $info->keyBits,
         );
         if (!$stream->seek(0)) {
             throw new InvalidEncryptedPackageException('Unable to rewind the EncryptedPackage stream.');
         }
 
-        $hmac = hash_init('sha512', HASH_HMAC, $hmacKey);
+        $hmac = hash_init($info->hashAlgorithm, HASH_HMAC, substr($hmacKey, 0, $info->hashSize));
         while (!$stream->eof()) {
             $chunk = $stream->read(65_536);
             if ($chunk === '') {
@@ -210,30 +229,44 @@ final class AgileEncryption
             hash_update($hmac, $chunk);
         }
 
-        if (!hash_equals($expectedHmac, hash_final($hmac, true))) {
+        if (!hash_equals(substr($expectedHmac, 0, $info->hashSize), hash_final($hmac, true))) {
             throw new InvalidEncryptedPackageException('EncryptedPackage failed its integrity check.');
         }
     }
 
-    private static function passwordHash(string $password, string $salt, int $spinCount): string
-    {
+    private static function passwordHash(
+        string $password,
+        string $salt,
+        int $spinCount,
+        string $hashAlgorithm = 'sha512',
+    ): string {
         $utf16Password = mb_convert_encoding($password, 'UTF-16LE', 'UTF-8');
-        $hash = hash('sha512', $salt . $utf16Password, true);
+        $hash = hash($hashAlgorithm, $salt . $utf16Password, true);
         for ($iteration = 0; $iteration < $spinCount; ++$iteration) {
-            $hash = hash('sha512', pack('V', $iteration) . $hash, true);
+            $hash = hash($hashAlgorithm, pack('V', $iteration) . $hash, true);
         }
 
         return $hash;
     }
 
-    private static function deriveKey(string $passwordHash, string $blockKey): string
-    {
-        return substr(hash('sha512', $passwordHash . $blockKey, true), 0, self::KEY_BYTES);
+    private static function deriveKey(
+        string $passwordHash,
+        string $blockKey,
+        string $hashAlgorithm = 'sha512',
+        int $keyBits = 256,
+    ): string {
+        $keyBytes = intdiv($keyBits, 8);
+        $derived = hash($hashAlgorithm, $passwordHash . $blockKey, true);
+
+        return substr(str_pad($derived, $keyBytes, "\x36"), 0, $keyBytes);
     }
 
-    private static function initializationVector(string $salt, string $blockKey): string
-    {
-        return substr(hash('sha512', $salt . $blockKey, true), 0, self::BLOCK_SIZE);
+    private static function initializationVector(
+        string $salt,
+        string $blockKey,
+        string $hashAlgorithm = 'sha512',
+    ): string {
+        return substr(str_pad(hash($hashAlgorithm, $salt . $blockKey, true), self::BLOCK_SIZE, "\x36"), 0, self::BLOCK_SIZE);
     }
 
     private static function encryptBlock(string $contents, string $key, string $iv): string
@@ -252,11 +285,15 @@ final class AgileEncryption
         return $result;
     }
 
-    private static function decryptBlock(string $contents, string $key, string $iv): string
-    {
+    private static function decryptBlock(
+        string $contents,
+        string $key,
+        string $iv,
+        int $keyBits = 256,
+    ): string {
         $result = openssl_decrypt(
             $contents,
-            'aes-256-cbc',
+            sprintf('aes-%d-cbc', $keyBits),
             $key,
             OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING,
             $iv,
@@ -285,20 +322,7 @@ final class AgileEncryption
 
     private static function unpackUInt64(string $value): int
     {
-        $low = self::unpackUInt32(substr($value, 0, 4));
-        $high = self::unpackUInt32(substr($value, 4, 4));
-
-        return $low + $high * 0x100000000;
-    }
-
-    private static function unpackUInt32(string $value): int
-    {
-        $parts = unpack('Vvalue', $value);
-        if ($parts === false || !is_int($parts['value'])) {
-            throw new InvalidEncryptedPackageException('Unable to decode an unsigned integer.');
-        }
-
-        return $parts['value'];
+        return UnsignedInteger::decode64BitLittleEndian($value);
     }
 
     private static function readExactly(Stream $stream, int $bytes): string
