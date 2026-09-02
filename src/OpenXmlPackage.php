@@ -15,6 +15,7 @@ use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Container\ContainerInterface;
 use DK\OpenXml\Internal\Container\ZipContainer;
 use DK\OpenXml\Internal\PackageRepairer;
+use DK\OpenXml\Internal\SignatureInspector;
 use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PackageInterface;
 use DK\OpenXml\Packaging\Part;
@@ -27,6 +28,8 @@ use DK\OpenXml\Packaging\Relationships;
 use DK\OpenXml\Repair\PackageRepairOptions;
 use DK\OpenXml\Repair\RepairReport;
 use DK\OpenXml\Security\PackageLimits;
+use DK\OpenXml\Signature\SignatureInspection;
+use DK\OpenXml\Signature\SignatureStatus;
 
 final class OpenXmlPackage implements PackageInterface
 {
@@ -428,12 +431,25 @@ final class OpenXmlPackage implements PackageInterface
         $this->getRelationships($sourcePartName)->remove($id);
     }
 
+    public function inspectSignatures(): SignatureInspection
+    {
+        return (new SignatureInspector(
+            $this->container,
+            $this->contentTypes,
+            $this->limits->maximumXmlBytes,
+        ))->inspect();
+    }
+
     public function validate(): array
     {
         $issues = [];
 
-        if ($this->hasDigitalSignatures()) {
+        $signatureInspection = $this->inspectSignatures();
+        if ($signatureInspection->status !== SignatureStatus::Unsigned) {
             $issues[] = 'Digitally signed packages cannot be saved because signature preservation is not supported.';
+        }
+        foreach ($signatureInspection->getIssues() as $signatureIssue) {
+            $issues[] = 'Digital signature: ' . $signatureIssue;
         }
 
         $partNames = $this->collectPartNames($issues);
@@ -495,17 +511,6 @@ final class OpenXmlPackage implements PackageInterface
     public function applyRepairs(PackageRepairOptions $options): RepairReport
     {
         return $this->packageRepairer()->run($options, true);
-    }
-
-    private function hasDigitalSignatures(): bool
-    {
-        foreach ($this->container->entries() as $entryName) {
-            if (str_starts_with(strtolower($entryName), '_xmlsignatures/')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function packageRepairer(): PackageRepairer

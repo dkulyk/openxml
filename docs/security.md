@@ -63,8 +63,13 @@ It does not validate WordprocessingML, SpreadsheetML, or PresentationML schemas.
 Applications handling those vocabularies remain responsible for domain-specific
 validation.
 
-Digitally signed packages may be inspected, but saving is blocked because a
-rewrite cannot currently preserve their signatures.
+Digitally signed packages may be inspected, but inspection does not authenticate
+their contents or signer. It does not recalculate reference digests, verify the
+signature value, validate certificates, or establish trust. See
+[Digital signatures](signatures.md) for the complete boundary.
+
+Saving is blocked whenever signature material is detected because a rewrite
+cannot currently preserve a valid signature.
 
 For reporting vulnerabilities and supported release information, see the
 [security policy](../SECURITY.md).
