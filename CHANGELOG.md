@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file. The format 
 
 - Read-only structural inspection of OPC digital-signature origins, signature
   parts, XMLDSig references, algorithms, and malformed signature graphs.
+- Explicit staged removal of OPC signatures and related certificates before
+  writing an intentionally unsigned package.
 - Agile Encryption reading for AES-128/192/256 with SHA-1/256/384/512,
   bounded encryption metadata, safe cross-platform unsigned-size decoding,
   and an independently generated Microsoft Excel compatibility fixture.

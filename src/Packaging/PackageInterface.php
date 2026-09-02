@@ -7,6 +7,7 @@ namespace DK\OpenXml\Packaging;
 use DK\OpenXml\Repair\PackageRepairOptions;
 use DK\OpenXml\Repair\RepairReport;
 use DK\OpenXml\Signature\SignatureInspection;
+use DK\OpenXml\Signature\SignatureRemovalResult;
 
 interface PackageInterface
 {
@@ -38,6 +39,8 @@ interface PackageInterface
     public function removeRelationship(string $id, ?string $sourcePartName = null): void;
 
     public function inspectSignatures(): SignatureInspection;
+
+    public function removeSignatures(): SignatureRemovalResult;
 
     /** @return list<string> */
     public function validate(): array;

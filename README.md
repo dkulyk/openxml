@@ -19,6 +19,7 @@ PresentationML documents.
 - Stream large images and embedded files without keeping them in PHP strings.
 - Navigate and modify package-level and part-level relationships.
 - Inspect OPC digital-signature parts and references without claiming cryptographic verification.
+- Explicitly remove signature material when producing an unsigned copy.
 - Detect ZIP, CFBF/OLE, encrypted OOXML, and unknown containers.
 - Read Agile and Standard Office encryption and write modern Agile encryption.
 - Apply configurable limits to untrusted ZIP and encrypted input.

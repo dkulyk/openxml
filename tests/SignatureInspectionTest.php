@@ -14,6 +14,7 @@ final class SignatureInspectionTest extends TestCase
 {
     private const ORIGIN_CONTENT_TYPE = 'application/vnd.openxmlformats-package.digital-signature-origin';
     private const SIGNATURE_CONTENT_TYPE = 'application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml';
+    private const CERTIFICATE_CONTENT_TYPE = 'application/vnd.openxmlformats-package.digital-signature-certificate';
 
     public function testUnsignedPackageHasAnEmptyInspectionResult(): void
     {
@@ -107,6 +108,64 @@ final class SignatureInspectionTest extends TestCase
 
         self::assertSame(SignatureStatus::Malformed, $inspection->status);
         self::assertStringContainsString('has no relationship part', $inspection->getIssues()[0]);
+    }
+
+    public function testSignaturesCanBeExplicitlyRemovedBeforeSaving(): void
+    {
+        $package = $this->signedPackage($this->signatureXml());
+        $package->addPart('/certificates/signer.cer', self::CERTIFICATE_CONTENT_TYPE, 'certificate');
+        $package->addRelationship(
+            RelationshipType::DIGITAL_SIGNATURE_CERTIFICATE,
+            '/certificates/signer.cer',
+            sourcePartName: '/_xmlsignatures/sig1.xml',
+        );
+
+        $result = $package->removeSignatures();
+
+        self::assertTrue($result->removedAnything());
+        self::assertSame(3, $result->removedRelationships);
+        self::assertSame([
+            '/_xmlsignatures/origin.sigs',
+            '/_xmlsignatures/sig1.xml',
+            '/certificates/signer.cer',
+        ], $result->getRemovedPartNames());
+        self::assertSame(SignatureStatus::Unsigned, $package->inspectSignatures()->status);
+        self::assertSame([], $package->validate());
+        self::assertTrue($package->hasPart('/document.xml'));
+
+        $filename = tempnam(sys_get_temp_dir(), 'openxml-unsigned-');
+        self::assertIsString($filename);
+
+        try {
+            $package->saveAs($filename);
+            self::assertSame(SignatureStatus::Unsigned, OpenXmlPackage::open($filename)->inspectSignatures()->status);
+        } finally {
+            @unlink($filename);
+        }
+    }
+
+    public function testMalformedUnlinkedSignatureMaterialCanBeRemoved(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/_xmlsignatures/broken.xml', self::SIGNATURE_CONTENT_TYPE, '<broken');
+
+        $result = $package->removeSignatures();
+
+        self::assertSame(['/_xmlsignatures/broken.xml'], $result->getRemovedPartNames());
+        self::assertSame(SignatureStatus::Unsigned, $package->inspectSignatures()->status);
+        self::assertSame([], $package->validate());
+    }
+
+    public function testRemovingSignaturesFromUnsignedPackageIsANoOp(): void
+    {
+        $package = OpenXmlPackage::create();
+
+        $result = $package->removeSignatures();
+
+        self::assertFalse($result->removedAnything());
+        self::assertSame([], $result->getRemovedPartNames());
+        self::assertSame(0, $result->removedRelationships);
+        self::assertFalse($package->hasChanges());
     }
 
     private function signedPackage(string $signatureXml): OpenXmlPackage
