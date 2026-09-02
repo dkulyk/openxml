@@ -1,10 +1,10 @@
-# DK OpenXml
+# DK OpenXml Package
 
-[![Latest Stable Version](https://img.shields.io/packagist/v/dkulyk/openxml.svg)](https://packagist.org/packages/dkulyk/openxml)
-[![Total Downloads](https://img.shields.io/packagist/dt/dkulyk/openxml.svg)](https://packagist.org/packages/dkulyk/openxml)
-[![PHP Version](https://img.shields.io/packagist/dependency-v/dkulyk/openxml/php.svg)](https://packagist.org/packages/dkulyk/openxml)
-[![CI](https://github.com/dkulyk/openxml/actions/workflows/ci.yml/badge.svg)](https://github.com/dkulyk/openxml/actions/workflows/ci.yml)
-[![License](https://img.shields.io/packagist/l/dkulyk/openxml.svg)](https://github.com/dkulyk/openxml/blob/main/LICENSE)
+[![Latest Stable Version](https://img.shields.io/packagist/v/dkulyk/openxml-package.svg)](https://packagist.org/packages/dkulyk/openxml-package)
+[![Total Downloads](https://img.shields.io/packagist/dt/dkulyk/openxml-package.svg)](https://packagist.org/packages/dkulyk/openxml-package)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/dkulyk/openxml-package/php.svg)](https://packagist.org/packages/dkulyk/openxml-package)
+[![CI](https://github.com/dkulyk/openxml-package/actions/workflows/ci.yml/badge.svg)](https://github.com/dkulyk/openxml-package/actions/workflows/ci.yml)
+[![License](https://img.shields.io/packagist/l/dkulyk/openxml-package.svg)](https://github.com/dkulyk/openxml-package/blob/main/LICENSE)
 
 A PHP 8.1+ library for reading, creating, editing, encrypting, and decrypting
 Open Packaging Conventions (OPC) packages used by DOCX, XLSX, and PPTX files.
@@ -35,7 +35,7 @@ Encryption additionally requires the OpenSSL extension and
 ## Installation
 
 ```shell
-composer require dkulyk/openxml
+composer require dkulyk/openxml-package
 ```
 
 For encrypted Office files, also install the optional CFBF implementation:
@@ -120,5 +120,5 @@ interoperability and publish package benchmark results.
 
 ## License
 
-DK OpenXml is open-source software licensed under the
-[MIT License](https://github.com/dkulyk/openxml/blob/main/LICENSE).
+DK OpenXml Package is open-source software licensed under the
+[MIT License](https://github.com/dkulyk/openxml-package/blob/main/LICENSE).
