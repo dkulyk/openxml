@@ -32,7 +32,7 @@ final class AgileEncryption
      */
     public static function encrypt($source, $destination, string $password, int $spinCount): AgileEncryptionInfo
     {
-        self::assertOpenSsl();
+        EncryptedPackageIo::assertOpenSsl();
         $metadata = fstat($source);
         if ($metadata === false) {
             throw new InvalidEncryptedPackageException('Unable to determine the source package size.');
@@ -61,7 +61,7 @@ final class AgileEncryption
         );
 
         $sizeHeader = self::packUInt64($metadata['size']);
-        self::write($destination, $sizeHeader);
+        EncryptedPackageIo::write($destination, $sizeHeader);
         // The integrity message is the complete EncryptedPackage stream,
         // including its eight-byte plaintext-size header.
         $hmac = hash_init('sha512', HASH_HMAC, $hmacKey = random_bytes(self::HASH_SIZE));
@@ -85,7 +85,7 @@ final class AgileEncryption
                 $secretKey,
                 self::initializationVector($keyDataSalt, pack('V', $segment)),
             );
-            self::write($destination, $cipherText);
+            EncryptedPackageIo::write($destination, $cipherText);
             hash_update($hmac, $cipherText);
             $bytesRead += strlen($plainText);
             ++$segment;
@@ -125,7 +125,7 @@ final class AgileEncryption
         $destination,
         int $maximumBytes,
     ): void {
-        self::assertOpenSsl();
+        EncryptedPackageIo::assertOpenSsl();
         $passwordHash = self::passwordHash(
             $password,
             $info->passwordSalt,
@@ -167,7 +167,7 @@ final class AgileEncryption
         if (!$encryptedPackage->seek(0)) {
             throw new InvalidEncryptedPackageException('Unable to rewind the EncryptedPackage stream.');
         }
-        $plainTextSize = self::unpackUInt64(self::readExactly($encryptedPackage, 8));
+        $plainTextSize = UnsignedInteger::decode64BitLittleEndian(EncryptedPackageIo::readExactly($encryptedPackage, 8));
         if ($plainTextSize > $maximumBytes) {
             throw new InvalidEncryptedPackageException(sprintf(
                 'Decrypted package size %d exceeds the configured maximum of %d bytes.',
@@ -179,7 +179,7 @@ final class AgileEncryption
         $expectedCipherTextBytes = intdiv($plainTextSize, self::SEGMENT_SIZE) * self::SEGMENT_SIZE;
         $remainder = $plainTextSize % self::SEGMENT_SIZE;
         if ($remainder > 0) {
-            $expectedCipherTextBytes += self::roundUp($remainder, self::BLOCK_SIZE);
+            $expectedCipherTextBytes += EncryptedPackageIo::roundUp($remainder, self::BLOCK_SIZE);
         }
         if ($encryptedPackage->getSize() !== 8 + $expectedCipherTextBytes) {
             throw new InvalidEncryptedPackageException('EncryptedPackage size does not match its declared plaintext size.');
@@ -190,12 +190,12 @@ final class AgileEncryption
         while ($remaining > 0) {
             $cipherTextBytes = min(self::SEGMENT_SIZE, $expectedCipherTextBytes);
             $plainText = self::decryptBlock(
-                self::readExactly($encryptedPackage, $cipherTextBytes),
+                EncryptedPackageIo::readExactly($encryptedPackage, $cipherTextBytes),
                 $secretKey,
                 self::initializationVector($info->keyDataSalt, pack('V', $segment), $info->hashAlgorithm),
                 $info->keyBits,
             );
-            self::write($destination, substr($plainText, 0, min($remaining, strlen($plainText))));
+            EncryptedPackageIo::write($destination, substr($plainText, 0, min($remaining, strlen($plainText))));
             $remaining -= min($remaining, strlen($plainText));
             $expectedCipherTextBytes -= $cipherTextBytes;
             ++$segment;
@@ -307,53 +307,11 @@ final class AgileEncryption
 
     private static function zeroPad(string $contents): string
     {
-        return str_pad($contents, self::roundUp(strlen($contents), self::BLOCK_SIZE), "\0");
-    }
-
-    private static function roundUp(int $value, int $multiple): int
-    {
-        return intdiv($value + $multiple - 1, $multiple) * $multiple;
+        return str_pad($contents, EncryptedPackageIo::roundUp(strlen($contents), self::BLOCK_SIZE), "\0");
     }
 
     private static function packUInt64(int $value): string
     {
         return pack('V2', $value & 0xFFFFFFFF, intdiv($value, 0x100000000));
-    }
-
-    private static function unpackUInt64(string $value): int
-    {
-        return UnsignedInteger::decode64BitLittleEndian($value);
-    }
-
-    private static function readExactly(Stream $stream, int $bytes): string
-    {
-        $contents = $stream->read($bytes);
-        if (strlen($contents) !== $bytes) {
-            throw new InvalidEncryptedPackageException('EncryptedPackage ended unexpectedly.');
-        }
-
-        return $contents;
-    }
-
-    /** @param resource $stream */
-    private static function write($stream, string $contents): void
-    {
-        $offset = 0;
-        while ($offset < strlen($contents)) {
-            $written = fwrite($stream, substr($contents, $offset));
-            if ($written === false || $written === 0) {
-                throw new InvalidEncryptedPackageException('Unable to write encrypted Office data.');
-            }
-            $offset += $written;
-        }
-    }
-
-    private static function assertOpenSsl(): void
-    {
-        if (!extension_loaded('openssl')) {
-            throw new \DK\OpenXml\Exception\MissingDependencyException(
-                'Office encryption requires the OpenSSL PHP extension.',
-            );
-        }
     }
 }
