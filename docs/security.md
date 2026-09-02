@@ -51,6 +51,11 @@ Agile encryption integrity is authenticated before output replacement. Wrong
 passwords, malformed metadata, and modified encrypted payloads fail with specific
 exceptions.
 
+`EncryptionLimits` bounds password-hash iterations, the `EncryptionInfo` stream,
+and the declared decrypted package size. Unsigned 64-bit size fields that cannot
+be represented safely by the current PHP build are rejected before arithmetic or
+allocation.
+
 ## Validation boundary
 
 The library validates OPC container structure and the integrity rules it manages.

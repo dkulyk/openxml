@@ -12,13 +12,17 @@ use DK\OpenXml\Encryption\EncryptionLimits;
 use DK\OpenXml\Exception\InvalidEncryptedPackageException;
 use DK\OpenXml\Exception\InvalidPasswordException;
 use DK\OpenXml\Exception\UnsupportedEncryptionException;
+use DK\OpenXml\Internal\UnsignedInteger;
 use DK\OpenXml\OfficeFileDetector;
 use DK\OpenXml\OfficeFileFormat;
 use DK\OpenXml\OpenXmlPackage;
+use DK\OpenXml\Tests\Support\AgileEncryptedFileFactory;
 use PHPUnit\Framework\TestCase;
 
 final class EncryptedOfficeFileTest extends TestCase
 {
+    private const EXCEL_AGILE_FIXTURE = __DIR__ . '/Fixtures/agile-encrypted-excel.xlsx.base64';
+
     /** @var list<string> */
     private array $files = [];
 
@@ -57,6 +61,32 @@ final class EncryptedOfficeFileTest extends TestCase
         self::assertSame(
             str_repeat('payload-', 1_000),
             OpenXmlPackage::open($decrypted)->getPart('/document.xml')->getContents(),
+        );
+    }
+
+    public function testMicrosoftExcelAgileFixtureCanBeDecrypted(): void
+    {
+        $encoded = file_get_contents(self::EXCEL_AGILE_FIXTURE);
+        self::assertNotFalse($encoded);
+        $contents = base64_decode($encoded, true);
+        self::assertNotFalse($contents);
+        self::assertSame(
+            'aebe9e967ae3576d654fc68c64b5d4fdbb8d5bf7cb86c7281b9621270244fa93',
+            hash('sha256', $contents),
+        );
+
+        $encrypted = $this->temporaryFile($contents);
+        $decrypted = $this->temporaryFile();
+        EncryptedOfficeFile::decrypt($encrypted, $decrypted, 'open');
+
+        $package = OpenXmlPackage::open($decrypted);
+        self::assertStringContainsString(
+            '<t>agile encryption fixture</t>',
+            $package->readPart('/xl/sharedStrings.xml'),
+        );
+        self::assertStringContainsString(
+            '<c r="B1"><v>42</v></c>',
+            $package->readPart('/xl/worksheets/sheet1.xml'),
         );
     }
 
@@ -133,6 +163,71 @@ final class EncryptedOfficeFileTest extends TestCase
     public function testDefaultOptionsUseOfficeCompatibleSpinCount(): void
     {
         self::assertSame(100_000, (new AgileEncryptionOptions())->spinCount);
+    }
+
+    /** @dataProvider agileProfiles */
+    public function testCompatibleAgileProfilesCanBeDecrypted(int $keyBits, string $hashAlgorithm): void
+    {
+        $source = $this->createPackage(sprintf('Agile AES-%d/%s', $keyBits, $hashAlgorithm));
+        $encrypted = $this->temporaryFile();
+        $decrypted = $this->temporaryFile();
+        AgileEncryptedFileFactory::create(
+            $source,
+            $encrypted,
+            'compatibility password',
+            $keyBits,
+            $hashAlgorithm,
+        );
+
+        EncryptedOfficeFile::decrypt($encrypted, $decrypted, 'compatibility password');
+
+        self::assertSame(hash_file('sha256', $source), hash_file('sha256', $decrypted));
+    }
+
+    /** @return iterable<string, array{int, string}> */
+    public static function agileProfiles(): iterable
+    {
+        yield 'AES-128/SHA-1' => [128, 'SHA1'];
+        yield 'AES-192/SHA-256' => [192, 'SHA256'];
+        yield 'AES-256/SHA-384' => [256, 'SHA384'];
+        yield 'AES-256/SHA-512' => [256, 'SHA512'];
+    }
+
+    public function testEncryptionInfoSizeLimitIsEnforcedBeforeParsing(): void
+    {
+        $source = $this->createPackage('bounded encryption metadata');
+        $encrypted = $this->temporaryFile();
+        $destination = $this->temporaryFile('preserve me');
+        EncryptedOfficeFile::encrypt($source, $encrypted, 'password', new AgileEncryptionOptions(10));
+
+        CompoundFileWriter::open($encrypted)
+            ->setStreamContents('EncryptionInfo', str_repeat('x', 129))
+            ->save($encrypted);
+
+        try {
+            EncryptedOfficeFile::decrypt(
+                $encrypted,
+                $destination,
+                'password',
+                new EncryptionLimits(maximumEncryptionInfoBytes: 128),
+            );
+            self::fail('Oversized EncryptionInfo was expected to fail.');
+        } catch (InvalidEncryptedPackageException $exception) {
+            self::assertStringContainsString('EncryptionInfo size', $exception->getMessage());
+            self::assertSame('preserve me', file_get_contents($destination));
+        }
+    }
+
+    public function testUnsignedPackageSizeRejectsValuesOutsideThePlatformRange(): void
+    {
+        foreach ([[0, 0x80000000, 8, PHP_INT_MAX], [0, 1, 4, 2_147_483_647]] as $words) {
+            try {
+                UnsignedInteger::from32BitWords(...$words);
+                self::fail('An unrepresentable package size was expected to fail.');
+            } catch (InvalidEncryptedPackageException $exception) {
+                self::assertStringContainsString('too large for this platform', $exception->getMessage());
+            }
+        }
     }
 
     /** @dataProvider standardAesKeySizes */

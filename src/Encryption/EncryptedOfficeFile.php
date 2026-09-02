@@ -96,8 +96,16 @@ final class EncryptedOfficeFile
         }
 
         $compoundFile = CompoundFile::open($source);
+        $encryptionInfoStream = $compoundFile->openStream('EncryptionInfo');
+        if ($encryptionInfoStream->getSize() > $limits->maximumEncryptionInfoBytes) {
+            throw new InvalidEncryptedPackageException(sprintf(
+                'EncryptionInfo size %d exceeds the configured maximum of %d bytes.',
+                $encryptionInfoStream->getSize(),
+                $limits->maximumEncryptionInfoBytes,
+            ));
+        }
         $info = EncryptionInfoReader::read(
-            $compoundFile->getStreamContents('EncryptionInfo'),
+            $encryptionInfoStream->getContents(),
             $limits->maximumSpinCount,
         );
 

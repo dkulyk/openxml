@@ -8,6 +8,7 @@ use DK\CompoundFile\Stream;
 use DK\OpenXml\Exception\InvalidEncryptedPackageException;
 use DK\OpenXml\Exception\InvalidPasswordException;
 use DK\OpenXml\Exception\MissingDependencyException;
+use DK\OpenXml\Internal\UnsignedInteger;
 
 /** @internal ECMA-376 Standard Encryption reader (AES/SHA-1). */
 final class StandardEncryption
@@ -99,12 +100,7 @@ final class StandardEncryption
 
     private static function unpackUInt64(string $value): int
     {
-        $parts = unpack('Vlow/Vhigh', $value);
-        if ($parts === false || !is_int($parts['low']) || !is_int($parts['high'])) {
-            throw new InvalidEncryptedPackageException('Unable to decode the decrypted package size.');
-        }
-
-        return $parts['low'] + $parts['high'] * 0x100000000;
+        return UnsignedInteger::decode64BitLittleEndian($value);
     }
 
     private static function roundUp(int $value, int $multiple): int

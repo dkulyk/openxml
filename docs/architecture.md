@@ -13,7 +13,7 @@ DK\OpenXml\OpenXmlPackage
     └── Internal\Container\ZipContainer
 
 DK\OpenXml\Encryption\EncryptedOfficeFile
-├── Internal\Encryption\AgileEncryption (read/write)
+├── Internal\Encryption\AgileEncryption (compatible profiles read, modern profile write)
 ├── Internal\Encryption\StandardEncryption (read-only)
 └── dkulyk/compound-file (optional CFBF integration)
 ```

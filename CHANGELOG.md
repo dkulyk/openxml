@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Agile Encryption reading for AES-128/192/256 with SHA-1/256/384/512,
+  bounded encryption metadata, safe cross-platform unsigned-size decoding,
+  and an independently generated Microsoft Excel compatibility fixture.
 - Strict ECMA-376 part-name validation, ASCII-case-insensitive lookup and
   collision detection, derivation checks, and RFC-style relative target resolution.
 - Inbound relationship inspection, strict referenced-part removal, and an

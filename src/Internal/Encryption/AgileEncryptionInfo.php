@@ -13,6 +13,14 @@ final class AgileEncryptionInfo
     private const ENCRYPTION_NS = 'http://schemas.microsoft.com/office/2006/encryption';
     private const PASSWORD_NS = 'http://schemas.microsoft.com/office/2006/keyEncryptor/password';
 
+    /** @var array<string, int> */
+    private const HASH_SIZES = [
+        'SHA1' => 20,
+        'SHA256' => 32,
+        'SHA384' => 48,
+        'SHA512' => 64,
+    ];
+
     public function __construct(
         public readonly string $keyDataSalt,
         public readonly string $passwordSalt,
@@ -22,6 +30,9 @@ final class AgileEncryptionInfo
         public readonly string $encryptedKey,
         public readonly string $encryptedHmacKey,
         public readonly string $encryptedHmacValue,
+        public readonly int $keyBits = 256,
+        public readonly string $hashAlgorithm = 'SHA512',
+        public readonly int $hashSize = 64,
     ) {}
 
     public static function fromStream(string $contents, int $maximumSpinCount): self
@@ -63,8 +74,15 @@ final class AgileEncryptionInfo
         }
         $encryptedKey = self::element($xpath, '/e:encryption/e:keyEncryptors/e:keyEncryptor/p:encryptedKey');
 
-        self::assertAlgorithms($keyData);
-        self::assertAlgorithms($encryptedKey);
+        [$keyBits, $hashAlgorithm, $hashSize] = self::readAlgorithms($keyData);
+        [$passwordKeyBits, $passwordHashAlgorithm, $passwordHashSize] = self::readAlgorithms($encryptedKey);
+        if (
+            $passwordKeyBits !== $keyBits
+            || $passwordHashAlgorithm !== $hashAlgorithm
+            || $passwordHashSize !== $hashSize
+        ) {
+            throw new UnsupportedEncryptionException('Agile Encryption key-data and password profiles must match.');
+        }
 
         $spinCount = self::integerAttribute($encryptedKey, 'spinCount');
         if ($spinCount < 1 || $spinCount > $maximumSpinCount) {
@@ -80,10 +98,13 @@ final class AgileEncryptionInfo
             self::binaryAttribute($encryptedKey, 'saltValue', 16),
             $spinCount,
             self::binaryAttribute($encryptedKey, 'encryptedVerifierHashInput', 16),
-            self::binaryAttribute($encryptedKey, 'encryptedVerifierHashValue', 64),
-            self::binaryAttribute($encryptedKey, 'encryptedKeyValue', 32),
-            self::binaryAttribute($integrity, 'encryptedHmacKey', 64),
-            self::binaryAttribute($integrity, 'encryptedHmacValue', 64),
+            self::binaryAttribute($encryptedKey, 'encryptedVerifierHashValue', self::paddedLength($hashSize)),
+            self::binaryAttribute($encryptedKey, 'encryptedKeyValue', self::paddedLength(intdiv($keyBits, 8))),
+            self::binaryAttribute($integrity, 'encryptedHmacKey', self::paddedLength($hashSize)),
+            self::binaryAttribute($integrity, 'encryptedHmacValue', self::paddedLength($hashSize)),
+            $keyBits,
+            $hashAlgorithm,
+            $hashSize,
         );
     }
 
@@ -96,7 +117,7 @@ final class AgileEncryptionInfo
         $document->appendChild($encryption);
 
         $keyData = $document->createElementNS(self::ENCRYPTION_NS, 'keyData');
-        self::setAlgorithmAttributes($keyData, $this->keyDataSalt);
+        $this->setAlgorithmAttributes($keyData, $this->keyDataSalt);
         $encryption->appendChild($keyData);
 
         $integrity = $document->createElementNS(self::ENCRYPTION_NS, 'dataIntegrity');
@@ -108,7 +129,7 @@ final class AgileEncryptionInfo
         $keyEncryptor = $document->createElementNS(self::ENCRYPTION_NS, 'keyEncryptor');
         $keyEncryptor->setAttribute('uri', self::PASSWORD_NS);
         $passwordKey = $document->createElementNS(self::PASSWORD_NS, 'p:encryptedKey');
-        self::setAlgorithmAttributes($passwordKey, $this->passwordSalt);
+        $this->setAlgorithmAttributes($passwordKey, $this->passwordSalt);
         $passwordKey->setAttribute('spinCount', (string) $this->spinCount);
         $passwordKey->setAttribute('encryptedVerifierHashInput', base64_encode($this->encryptedVerifier));
         $passwordKey->setAttribute('encryptedVerifierHashValue', base64_encode($this->encryptedVerifierHash));
@@ -125,32 +146,30 @@ final class AgileEncryptionInfo
         return pack('vvV', 4, 4, 0x40) . $xml;
     }
 
-    private static function setAlgorithmAttributes(\DOMElement $element, string $salt): void
+    private function setAlgorithmAttributes(\DOMElement $element, string $salt): void
     {
         foreach ([
             'saltSize' => '16',
             'blockSize' => '16',
-            'keyBits' => '256',
-            'hashSize' => '64',
+            'keyBits' => (string) $this->keyBits,
+            'hashSize' => (string) $this->hashSize,
             'cipherAlgorithm' => 'AES',
             'cipherChaining' => 'ChainingModeCBC',
-            'hashAlgorithm' => 'SHA512',
+            'hashAlgorithm' => $this->hashAlgorithm,
             'saltValue' => base64_encode($salt),
         ] as $name => $value) {
             $element->setAttribute($name, $value);
         }
     }
 
-    private static function assertAlgorithms(\DOMElement $element): void
+    /** @return array{int, string, int} */
+    private static function readAlgorithms(\DOMElement $element): array
     {
         $expected = [
             'saltSize' => '16',
             'blockSize' => '16',
-            'keyBits' => '256',
-            'hashSize' => '64',
             'cipherAlgorithm' => 'AES',
             'cipherChaining' => 'ChainingModeCBC',
-            'hashAlgorithm' => 'SHA512',
         ];
         foreach ($expected as $name => $value) {
             if ($element->getAttribute($name) !== $value) {
@@ -161,6 +180,23 @@ final class AgileEncryptionInfo
                 ));
             }
         }
+
+        $keyBits = self::integerAttribute($element, 'keyBits');
+        $hashAlgorithm = $element->getAttribute('hashAlgorithm');
+        $hashSize = self::integerAttribute($element, 'hashSize');
+        if (
+            !in_array($keyBits, [128, 192, 256], true)
+            || !isset(self::HASH_SIZES[$hashAlgorithm])
+            || self::HASH_SIZES[$hashAlgorithm] !== $hashSize
+        ) {
+            throw new UnsupportedEncryptionException(sprintf(
+                'Unsupported Agile Encryption profile AES-%d/%s.',
+                $keyBits,
+                $hashAlgorithm,
+            ));
+        }
+
+        return [$keyBits, $hashAlgorithm, $hashSize];
     }
 
     private static function element(\DOMXPath $xpath, string $expression): \DOMElement
@@ -196,5 +232,10 @@ final class AgileEncryptionInfo
         }
 
         return $value;
+    }
+
+    private static function paddedLength(int $length): int
+    {
+        return intdiv($length + 15, 16) * 16;
     }
 }

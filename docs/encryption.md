@@ -53,9 +53,11 @@ New files use ECMA-376 Agile Encryption with AES-256-CBC, SHA-512, a
 100,000-iteration password hash, random salts, password verification, and an
 integrity HMAC. Payloads are processed in 4096-byte segments.
 
-Decryption recognizes Agile Encryption and older Standard Encryption using
-AES-128, AES-192, or AES-256 with SHA-1. Standard Encryption remains read-only
-because it lacks Agile's authenticated integrity metadata.
+Agile decryption accepts AES-128, AES-192, and AES-256 with SHA-1, SHA-256,
+SHA-384, or SHA-512 when the key-data and password profiles match. Decryption
+also recognizes older Standard Encryption using AES-128, AES-192, or AES-256
+with SHA-1. Standard Encryption remains read-only because it lacks Agile's
+authenticated integrity metadata.
 
 The destination is replaced only after cryptographic verification and OPC
 validation succeed. A wrong password, modified ciphertext, or invalid package
@@ -78,4 +80,4 @@ The library does not support:
 | `EncryptedOfficeFile::encrypt(...)` | Write Agile AES-256/SHA-512 encryption. |
 | `EncryptedOfficeFile::decrypt(...)` | Atomically decrypt Agile or Standard Encryption into a validated OPC package. |
 | `AgileEncryptionOptions` | Configure the password hash work factor for new files. |
-| `EncryptionLimits` | Bound password work and decrypted output size. |
+| `EncryptionLimits` | Bound password work, encryption metadata, and decrypted output size. |
