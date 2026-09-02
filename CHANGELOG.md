@@ -44,6 +44,7 @@ All notable changes to this project will be documented in this file. The format 
 - Saving after moving a part onto the name of a removed part no longer fails with a ZIP rename error.
 - Packages saved to a new path now receive the permissions a regular file create would give under the current umask instead of `0600`.
 - Part names with percent-encoded non-ASCII characters such as `/word/%C3%A9.xml` are accepted; ECMA-376 only forbids percent-encoded separators and unreserved characters.
+- `getRelationships()` returns one live collection per source part, so repeated lookups no longer overwrite each other's changes or re-parse the relationship XML.
 
 ## [0.4.0] - 2026-09-02
 

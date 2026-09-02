@@ -39,6 +39,9 @@ final class OpenXmlPackage implements PackageInterface
     /** @var array<string, string> Lowercase part name => stored part name. */
     private array $partNames = [];
 
+    /** @var array<string, Relationships> Source part name ('' for the package) => live relationship collection. */
+    private array $relationships = [];
+
     private function __construct(
         private ContainerInterface $container,
         private ContentTypes $contentTypes,
@@ -321,6 +324,7 @@ final class OpenXmlPackage implements PackageInterface
         unset(
             $this->partNames[strtolower($name)],
             $this->partNames[strtolower($relationshipPartName)],
+            $this->relationships[$name],
         );
         $this->changed = true;
     }
@@ -370,7 +374,7 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->contentTypes->removeOverride($source);
         $this->contentTypes->setOverride($destination, $contentType);
-        unset($this->partNames[strtolower($source)]);
+        unset($this->partNames[strtolower($source)], $this->relationships[$source], $this->relationships[$destination]);
         $this->partNames[strtolower($destination)] = $destination;
 
         foreach ($relationshipChanges as [$relationshipSource, $id, $target]) {
@@ -395,24 +399,28 @@ final class OpenXmlPackage implements PackageInterface
             }
         }
 
-        $relationshipPartName = PartName::relationshipsName($sourcePartName);
-        $relationshipEntryName = PartName::entry($relationshipPartName);
+        // One live collection per source: separate handles would otherwise
+        // overwrite each other's changes when they persist.
+        $cacheKey = $sourcePartName ?? '';
+        if (isset($this->relationships[$cacheKey])) {
+            return $this->relationships[$cacheKey];
+        }
+
+        $relationshipEntryName = PartName::entry(PartName::relationshipsName($sourcePartName));
         $onChange = fn(Relationships $relationships) => $this->writeRelationships(
             $relationships,
             $sourcePartName,
         );
 
-        if (!$this->container->has($relationshipEntryName)) {
-            return new Relationships($this, $sourcePartName, $onChange);
-        }
-
-        return Relationships::fromXml(
-            $this->container->read($relationshipEntryName),
-            $this,
-            $sourcePartName,
-            $onChange,
-            $this->limits->maximumXmlBytes,
-        );
+        return $this->relationships[$cacheKey] = $this->container->has($relationshipEntryName)
+            ? Relationships::fromXml(
+                $this->container->read($relationshipEntryName),
+                $this,
+                $sourcePartName,
+                $onChange,
+                $this->limits->maximumXmlBytes,
+            )
+            : new Relationships($this, $sourcePartName, $onChange);
     }
 
     public function addRelationship(
@@ -644,6 +652,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->sourceFilename = $freshPackage->sourceFilename;
         $this->sourceFingerprint = $freshPackage->sourceFingerprint;
         $this->partNames = $freshPackage->partNames;
+        $this->relationships = [];
         $this->changed = false;
     }
 
@@ -909,6 +918,7 @@ final class OpenXmlPackage implements PackageInterface
     private function rebuildPartNameIndex(): void
     {
         $this->partNames = [];
+        $this->relationships = [];
         foreach ($this->container->entries() as $entryName) {
             if ($entryName === '[Content_Types].xml') {
                 continue;
