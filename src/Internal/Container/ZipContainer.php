@@ -281,6 +281,11 @@ final class ZipContainer implements ContainerInterface
 
         try {
             foreach ($this->moved as $destination => $source) {
+                // move() only accepts a destination that is absent or removed,
+                // so an entry still under that name in the source archive is stale.
+                if ($archive->locateName($destination) !== false && !$archive->deleteName($destination)) {
+                    throw new OpenXmlException(sprintf('Unable to remove ZIP entry "%s".', $destination));
+                }
                 if ($archive->locateName($source) === false || !$archive->renameName($source, $destination)) {
                     throw new OpenXmlException(sprintf(
                         'Unable to move ZIP entry "%s" to "%s".',
