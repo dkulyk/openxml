@@ -26,6 +26,57 @@ final class RelationshipsTest extends TestCase
         self::assertSame('word/document.xml', PartName::relativeTarget(null, '/word/document.xml'));
     }
 
+    /** @dataProvider validPartNameProvider */
+    public function testValidOpcPartNamesAreAccepted(string $name): void
+    {
+        self::assertSame($name, PartName::normalize($name));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function validPartNameProvider(): iterable
+    {
+        yield 'ordinary ASCII' => ['/word/document.xml'];
+        yield 'raw Unicode' => ['/дані/é.xml'];
+        yield 'encoded space' => ['/custom/a%20b.xml'];
+        yield 'reserved segment characters' => ["/custom/a;b@c!$&'()+,=.xml"];
+    }
+
+    /** @dataProvider invalidPartNameProvider */
+    public function testInvalidOpcPartNamesAreRejected(string $name): void
+    {
+        $this->expectException(OpenXmlException::class);
+        PartName::normalize($name);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidPartNameProvider(): iterable
+    {
+        yield 'not absolute' => ['word/document.xml'];
+        yield 'package root' => ['/'];
+        yield 'trailing slash' => ['/word/'];
+        yield 'empty segment' => ['/word//document.xml'];
+        yield 'dot segment' => ['/word/./document.xml'];
+        yield 'parent segment' => ['/word/../document.xml'];
+        yield 'segment ending in dot' => ['/word/document.'];
+        yield 'raw space' => ['/word/my document.xml'];
+        yield 'raw bracket' => ['/word/[document].xml'];
+        yield 'malformed percent encoding' => ['/word/%2.xml'];
+        yield 'encoded slash' => ['/word%2Fdocument.xml'];
+        yield 'encoded backslash' => ['/word%5cdocument.xml'];
+        yield 'encoded unreserved ASCII' => ['/word/%41.xml'];
+        yield 'encoded Unicode' => ['/word/%C3%A9.xml'];
+        yield 'query' => ['/word/document.xml?x'];
+        yield 'fragment' => ['/word/document.xml#x'];
+    }
+
+    public function testPartNameConflictsFollowOpcEquivalenceAndDerivationRules(): void
+    {
+        self::assertTrue(PartName::equivalent('/Word/Document.xml', '/word/document.XML'));
+        self::assertTrue(PartName::conflicts('/a', '/A/b.xml'));
+        self::assertTrue(PartName::conflicts('/a/b.xml', '/A/B.XML'));
+        self::assertFalse(PartName::conflicts('/a/b.xml', '/a/c.xml'));
+    }
+
     public function testRelationshipSourceRejectsAnOrdinaryPart(): void
     {
         $this->expectException(OpenXmlException::class);
@@ -122,5 +173,23 @@ final class RelationshipsTest extends TestCase
         yield 'sibling target' => ['/word/document.xml', 'styles.xml', '/word/styles.xml'];
         yield 'parent target' => ['/word/header/header1.xml', '../media/image.png', '/word/media/image.png'];
         yield 'absolute target' => ['/word/document.xml', '/docProps/core.xml', '/docProps/core.xml'];
+        yield 'current-directory target' => ['/word/document.xml', './styles.xml', '/word/styles.xml'];
+    }
+
+    /** @dataProvider invalidInternalTargetProvider */
+    public function testInvalidInternalRelationshipTargetsAreRejected(string $target): void
+    {
+        $this->expectException(OpenXmlException::class);
+        PartName::resolveTarget('/word/document.xml', $target);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidInternalTargetProvider(): iterable
+    {
+        yield 'escapes root' => ['../../outside.xml'];
+        yield 'URI scheme' => ['https://example.com/file.xml'];
+        yield 'empty path segment' => ['media//image.png'];
+        yield 'invalid resolved part name' => ['media/image.'];
+        yield 'encoded slash alias' => ['media%2Fimage.png'];
     }
 }

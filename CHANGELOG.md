@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Strict ECMA-376 part-name validation, ASCII-case-insensitive lookup and
+  collision detection, derivation checks, and RFC-style relative target resolution.
 - Inbound relationship inspection, strict referenced-part removal, and an
   explicit cascading removal API with a structured result.
 - Explicit package repair analysis and application for selected dangling or
