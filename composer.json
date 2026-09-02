@@ -1,5 +1,5 @@
 {
-    "name": "dkulyk/openxml",
+    "name": "dkulyk/openxml-package",
     "description": "Read, write, encrypt, and decrypt OPC packages for Office Open XML documents",
     "keywords": [
         "docx",
@@ -10,7 +10,7 @@
         "pptx",
         "xlsx"
     ],
-    "homepage": "https://github.com/dkulyk/openxml",
+    "homepage": "https://github.com/dkulyk/openxml-package",
     "type": "library",
     "license": "MIT",
     "require": {
@@ -25,6 +25,9 @@
         "phpstan/phpstan-strict-rules": "^2.0",
         "phpunit/phpunit": "^10.5"
     },
+    "replace": {
+        "dkulyk/openxml": "self.version"
+    },
     "autoload": {
         "psr-4": {
             "DK\\OpenXml\\": "src/"
@@ -36,8 +39,8 @@
         }
     },
     "support": {
-        "issues": "https://github.com/dkulyk/openxml/issues",
-        "source": "https://github.com/dkulyk/openxml"
+        "issues": "https://github.com/dkulyk/openxml-package/issues",
+        "source": "https://github.com/dkulyk/openxml-package"
     },
     "suggest": {
         "dkulyk/compound-file": "Required to inspect, encrypt, and decrypt CFBF-based Office Open XML files.",

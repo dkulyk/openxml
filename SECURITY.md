@@ -8,7 +8,7 @@ Until the first stable release, security fixes are applied to the latest `main` 
 
 Please do not disclose vulnerabilities in a public issue. Use the repository's private GitHub security-advisory reporting flow:
 
-<https://github.com/dkulyk/openxml/security/advisories/new>
+<https://github.com/dkulyk/openxml-package/security/advisories/new>
 
 Include a minimal reproducer, affected package structure, expected impact, and any known mitigations. Reports will be acknowledged as soon as practical.
 

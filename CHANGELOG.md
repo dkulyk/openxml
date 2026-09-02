@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Renamed the Composer package from `dkulyk/openxml` to
+  `dkulyk/openxml-package` to make its OPC packaging scope explicit.
 - Reorganized detailed package, encryption, security, and architecture guidance
   into focused documentation pages while keeping the README as a concise entry point.
 - CI cancellation now groups repeated pull-request runs by pull-request number, and feature branches no longer create duplicate push and pull-request runs.
@@ -97,9 +99,9 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/dkulyk/openxml/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/dkulyk/openxml/compare/v0.2.1...v0.3.0
-[0.2.1]: https://github.com/dkulyk/openxml/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/dkulyk/openxml/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/dkulyk/openxml/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dkulyk/openxml-package/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dkulyk/openxml-package/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/dkulyk/openxml-package/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/dkulyk/openxml-package/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/dkulyk/openxml-package/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/dkulyk/openxml-package/releases/tag/v0.1.0
