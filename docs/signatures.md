@@ -59,6 +59,24 @@ invalidate a signature, and the library does not yet preserve or regenerate
 signatures. This restriction also applies to malformed or unlinked signature
 material so that it cannot be silently discarded.
 
+To intentionally produce an unsigned copy, remove signature material explicitly
+before saving:
+
+```php
+$result = $package->removeSignatures();
+
+foreach ($result->getRemovedPartNames() as $partName) {
+    echo 'Removed ', $partName, PHP_EOL;
+}
+
+$package->saveAs('unsigned-document.docx');
+```
+
+The operation is staged like other package mutations. It removes the signature
+origin, XML signatures, related certificates, their relationship parts, inbound
+relationships, and content-type overrides. `discardChanges()` can restore an
+opened source package before it is saved.
+
 The structures follow the digital-signature conventions in
 [ECMA-376 Part 2](https://ecma-international.org/publications-and-standards/standards/ecma-376/)
 and the [W3C XML Signature specification](https://www.w3.org/TR/xmldsig-core/).

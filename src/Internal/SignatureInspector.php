@@ -12,6 +12,7 @@ use DK\OpenXml\Packaging\RelationshipInterface;
 use DK\OpenXml\Packaging\Relationships;
 use DK\OpenXml\Packaging\RelationshipType;
 use DK\OpenXml\Signature\PackageSignature;
+use DK\OpenXml\Signature\SignatureContentType;
 use DK\OpenXml\Signature\SignatureInspection;
 use DK\OpenXml\Signature\SignatureReference;
 use DK\OpenXml\Signature\SignatureStatus;
@@ -20,8 +21,6 @@ use DK\OpenXml\Signature\SignatureStatus;
 final class SignatureInspector
 {
     private const XML_SIGNATURE_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#';
-    private const ORIGIN_CONTENT_TYPE = 'application/vnd.openxmlformats-package.digital-signature-origin';
-    private const SIGNATURE_CONTENT_TYPE = 'application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml';
 
     /** @var array<string, string> Lowercase part name => stored part name. */
     private array $partNames = [];
@@ -72,7 +71,7 @@ final class SignatureInspector
 
             return $this->result(null, [], $issues, true);
         }
-        if ($this->contentTypes->getForPart($originPartName) !== self::ORIGIN_CONTENT_TYPE) {
+        if ($this->contentTypes->getForPart($originPartName) !== SignatureContentType::ORIGIN) {
             $issues[] = sprintf('Digital-signature origin part "%s" has an invalid content type.', $originPartName);
         }
 
@@ -100,7 +99,7 @@ final class SignatureInspector
                 continue;
             }
             $linkedSignatureParts[strtolower($partName)] = true;
-            if ($this->contentTypes->getForPart($partName) !== self::SIGNATURE_CONTENT_TYPE) {
+            if ($this->contentTypes->getForPart($partName) !== SignatureContentType::XML_SIGNATURE) {
                 $issues[] = sprintf('Digital-signature part "%s" has an invalid content type.', $partName);
 
                 continue;
@@ -278,7 +277,7 @@ final class SignatureInspector
         foreach ($this->partNames as $partName) {
             if (
                 str_starts_with(strtolower($partName), '/_xmlsignatures/')
-                || in_array($this->contentTypes->getForPart($partName), [self::ORIGIN_CONTENT_TYPE, self::SIGNATURE_CONTENT_TYPE], true)
+                || in_array($this->contentTypes->getForPart($partName), [SignatureContentType::ORIGIN, SignatureContentType::XML_SIGNATURE, SignatureContentType::CERTIFICATE], true)
             ) {
                 return true;
             }
@@ -292,7 +291,7 @@ final class SignatureInspector
     {
         $partNames = [];
         foreach ($this->partNames as $partName) {
-            if ($this->contentTypes->getForPart($partName) === self::SIGNATURE_CONTENT_TYPE) {
+            if ($this->contentTypes->getForPart($partName) === SignatureContentType::XML_SIGNATURE) {
                 $partNames[] = $partName;
             }
         }

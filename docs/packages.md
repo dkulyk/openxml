@@ -138,6 +138,7 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `movePart(string $source, string $destination): PartInterface` | Move a part and update relationships that depend on its name. |
 | `getRelationships(?string $sourcePartName = null): Relationships` | Read package or part relationships. |
 | `inspectSignatures(): SignatureInspection` | Inspect the OPC signature structure and return its status, parts, references, and issues. |
+| `removeSignatures(): SignatureRemovalResult` | Explicitly stage removal of signature parts, certificates, relationships, and content types. |
 | `validate(): array` | Return structural issues without saving. |
 | `hasChanges(): bool` | Report whether edits are staged. |
 | `discardChanges(): void` | Restore the source package or reset a new package. |

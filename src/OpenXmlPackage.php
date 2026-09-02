@@ -25,10 +25,13 @@ use DK\OpenXml\Packaging\PartRemovalResult;
 use DK\OpenXml\Packaging\RelationshipInterface;
 use DK\OpenXml\Packaging\RelationshipReference;
 use DK\OpenXml\Packaging\Relationships;
+use DK\OpenXml\Packaging\RelationshipType;
 use DK\OpenXml\Repair\PackageRepairOptions;
 use DK\OpenXml\Repair\RepairReport;
 use DK\OpenXml\Security\PackageLimits;
+use DK\OpenXml\Signature\SignatureContentType;
 use DK\OpenXml\Signature\SignatureInspection;
+use DK\OpenXml\Signature\SignatureRemovalResult;
 use DK\OpenXml\Signature\SignatureStatus;
 
 final class OpenXmlPackage implements PackageInterface
@@ -438,6 +441,105 @@ final class OpenXmlPackage implements PackageInterface
             $this->contentTypes,
             $this->limits->maximumXmlBytes,
         ))->inspect();
+    }
+
+    public function removeSignatures(): SignatureRemovalResult
+    {
+        $sourcePartNames = [];
+        $partsToRemove = [];
+        foreach ($this->partNames as $partName) {
+            if (PartName::isRelationshipsPart($partName)) {
+                continue;
+            }
+
+            $sourcePartNames[] = $partName;
+            if ($this->isSignaturePart($partName)) {
+                $partsToRemove[strtolower($partName)] = $partName;
+            }
+        }
+
+        /** @var array<string, Relationships> $relationshipsBySource */
+        $relationshipsBySource = [];
+        foreach ([null, ...$sourcePartNames] as $sourcePartName) {
+            $key = $sourcePartName ?? '';
+            $relationshipsBySource[$key] = $this->getRelationships($sourcePartName);
+
+            foreach ($relationshipsBySource[$key] as $relationship) {
+                if (!in_array($relationship->getType(), self::signatureRelationshipTypes(), true)) {
+                    continue;
+                }
+
+                if (!$relationship->isExternal()) {
+                    $targetPartName = $relationship->getTargetPartName();
+                    if ($targetPartName !== null) {
+                        $storedPartName = $this->findPartName($targetPartName);
+                        if ($storedPartName !== null && !PartName::isRelationshipsPart($storedPartName)) {
+                            $partsToRemove[strtolower($storedPartName)] = $storedPartName;
+                        }
+                    }
+                }
+            }
+        }
+
+        /** @var array<string, array{?string, string}> $relationshipsToRemove */
+        $relationshipsToRemove = [];
+        $removedRelationships = 0;
+        foreach ($relationshipsBySource as $sourceKey => $relationships) {
+            $sourcePartName = $sourceKey === '' ? null : $sourceKey;
+            foreach ($relationships as $relationship) {
+                if ($sourcePartName !== null && isset($partsToRemove[strtolower($sourcePartName)])) {
+                    ++$removedRelationships;
+
+                    continue;
+                }
+
+                $remove = in_array($relationship->getType(), self::signatureRelationshipTypes(), true);
+                if (!$remove && !$relationship->isExternal()) {
+                    $targetPartName = $relationship->getTargetPartName();
+                    $remove = $targetPartName !== null && isset($partsToRemove[strtolower($targetPartName)]);
+                }
+
+                if ($remove) {
+                    ++$removedRelationships;
+                    $relationshipsToRemove[$sourceKey . "\0" . $relationship->getId()] = [
+                        $sourcePartName,
+                        $relationship->getId(),
+                    ];
+                }
+            }
+        }
+
+        foreach ($relationshipsToRemove as [$sourcePartName, $relationshipId]) {
+            $this->getRelationships($sourcePartName)->remove($relationshipId);
+        }
+
+        $removedPartNames = array_values($partsToRemove);
+        sort($removedPartNames);
+        foreach ($removedPartNames as $partName) {
+            $this->removePartContents($partName);
+        }
+
+        return new SignatureRemovalResult($removedPartNames, $removedRelationships);
+    }
+
+    private function isSignaturePart(string $partName): bool
+    {
+        return str_starts_with(strtolower($partName), '/_xmlsignatures/')
+            || in_array(
+                $this->contentTypes->getForPart($partName),
+                [SignatureContentType::ORIGIN, SignatureContentType::XML_SIGNATURE, SignatureContentType::CERTIFICATE],
+                true,
+            );
+    }
+
+    /** @return list<string> */
+    private static function signatureRelationshipTypes(): array
+    {
+        return [
+            RelationshipType::DIGITAL_SIGNATURE_ORIGIN,
+            RelationshipType::DIGITAL_SIGNATURE,
+            RelationshipType::DIGITAL_SIGNATURE_CERTIFICATE,
+        ];
     }
 
     public function validate(): array
