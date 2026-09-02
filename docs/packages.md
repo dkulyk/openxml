@@ -137,11 +137,15 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `removePartAndRelationships(string $name): PartRemovalResult` | Explicitly remove a part and every inbound relationship. |
 | `movePart(string $source, string $destination): PartInterface` | Move a part and update relationships that depend on its name. |
 | `getRelationships(?string $sourcePartName = null): Relationships` | Read package or part relationships. |
+| `inspectSignatures(): SignatureInspection` | Inspect the OPC signature structure and return its status, parts, references, and issues. |
 | `validate(): array` | Return structural issues without saving. |
 | `hasChanges(): bool` | Report whether edits are staged. |
 | `discardChanges(): void` | Restore the source package or reset a new package. |
 | `save(): void` | Atomically replace the opened source. |
 | `saveAs(string $filename): void` | Atomically write to another path. |
+
+`inspectSignatures()` is structural inspection, not cryptographic verification.
+See [Digital signatures](signatures.md) for its trust boundary and examples.
 
 `validate()` reports missing relationship targets, invalid internal targets,
 orphan relationship parts, missing or stale content-type declarations, incorrect

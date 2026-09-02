@@ -9,6 +9,7 @@ DK\OpenXml\OpenXmlPackage
 ├── Packaging\PartInterface / Part
 ├── Packaging\Relationships / RelationshipInterface
 ├── Packaging\ContentTypes
+├── Signature\SignatureInspection / PackageSignature
 └── Internal\Container\ContainerInterface
     └── Internal\Container\ZipContainer
 
@@ -50,6 +51,7 @@ policies are defined.
 
 - `getContents()` materializes a complete part; use `openStream()` for large payloads.
 - Encrypted documents must be decrypted before opening them as OPC.
-- Digitally signed packages cannot be saved because signatures are not preserved.
+- Digital-signature structure can be inspected, but signatures are not
+  cryptographically verified or preserved when saving.
 - Atomic replacement requires same-directory rename support from the filesystem.
 - Validation covers OPC structure, not the schemas of Office XML vocabularies.

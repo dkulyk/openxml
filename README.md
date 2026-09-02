@@ -18,6 +18,7 @@ PresentationML documents.
 - Read, create, and atomically update OPC packages.
 - Stream large images and embedded files without keeping them in PHP strings.
 - Navigate and modify package-level and part-level relationships.
+- Inspect OPC digital-signature parts and references without claiming cryptographic verification.
 - Detect ZIP, CFBF/OLE, encrypted OOXML, and unknown containers.
 - Read Agile and Standard Office encryption and write modern Agile encryption.
 - Apply configurable limits to untrusted ZIP and encrypted input.
@@ -97,6 +98,8 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
   atomic edits, and the public packaging API.
 - [Encryption and file detection](docs/encryption.md) — container routing,
   encryption support, and password-protected Office files.
+- [Digital signatures](docs/signatures.md) — structural inspection, reported
+  metadata, trust boundaries, and save behavior.
 - [Security and limits](docs/security.md) — safe processing of untrusted files
   and current validation boundaries.
 - [Architecture](docs/architecture.md) — package layers, internal ZIP boundary,
