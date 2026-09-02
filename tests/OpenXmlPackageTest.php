@@ -249,6 +249,25 @@ final class OpenXmlPackageTest extends TestCase
         self::assertCount(0, $package->getRelationships());
     }
 
+    public function testRepeatedRelationshipLookupsShareOneLiveCollection(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/a.xml', 'application/xml', '<a/>');
+        $package->addPart('/b.xml', 'application/xml', '<b/>');
+
+        $first = $package->getRelationships();
+        $second = $package->getRelationships();
+        $first->create('urn:a', 'a.xml');
+        $second->create('urn:b', 'b.xml');
+
+        self::assertSame($first, $second);
+        self::assertCount(2, $package->getRelationships());
+        self::assertSame('rId2', $package->getRelationships()->firstByType('urn:b')?->getId());
+
+        $package->saveAs($this->filename);
+        self::assertCount(2, OpenXmlPackage::open($this->filename)->getRelationships());
+    }
+
     public function testRemovingRelationshipsByResolvedTargetPersists(): void
     {
         $package = OpenXmlPackage::create();
