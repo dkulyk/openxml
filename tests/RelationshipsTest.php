@@ -38,6 +38,7 @@ final class RelationshipsTest extends TestCase
         yield 'ordinary ASCII' => ['/word/document.xml'];
         yield 'raw Unicode' => ['/дані/é.xml'];
         yield 'encoded space' => ['/custom/a%20b.xml'];
+        yield 'encoded Unicode' => ['/word/%C3%A9.xml'];
         yield 'reserved segment characters' => ["/custom/a;b@c!$&'()+,=.xml"];
     }
 
@@ -64,7 +65,6 @@ final class RelationshipsTest extends TestCase
         yield 'encoded slash' => ['/word%2Fdocument.xml'];
         yield 'encoded backslash' => ['/word%5cdocument.xml'];
         yield 'encoded unreserved ASCII' => ['/word/%41.xml'];
-        yield 'encoded Unicode' => ['/word/%C3%A9.xml'];
         yield 'query' => ['/word/document.xml?x'];
         yield 'fragment' => ['/word/document.xml#x'];
     }

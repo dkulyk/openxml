@@ -175,10 +175,12 @@ final class PartName
     {
         preg_match_all('/%[0-9A-Fa-f]{2}/', $segment, $matches);
         foreach ($matches[0] as $encoding) {
+            // ECMA-376 [M1.7] and [M1.8]: percent-encoded separators and
+            // unreserved characters are aliases; encoded non-ASCII is the
+            // standard way to store IRI part names in ZIP item names.
             $byte = hexdec(substr($encoding, 1));
             if (
-                $byte >= 0x80
-                || $byte === 0x2F
+                $byte === 0x2F
                 || $byte === 0x5C
                 || $byte >= 0x30 && $byte <= 0x39
                 || $byte >= 0x41 && $byte <= 0x5A
