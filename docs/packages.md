@@ -190,9 +190,9 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `create(?PackageLimits $limits = null): self` | Create an empty OPC package. |
 | `open(string $filename, ?PackageLimits $limits = null): self` | Open and validate an OPC ZIP package lazily. |
 | `edit(string $filename, callable $edit, ?PackageLimits $limits = null): void` | Apply an edit and atomically save when the callback succeeds. |
-| `hasPart(string $name): bool` | Check whether a part exists. |
-| `getPart(string $name): PartInterface` | Return a part without loading its contents. |
-| `getParts(): Traversable` | Iterate ordinary package parts. |
+| `hasPart(string $name): bool` | Check whether a valid OPC part exists; invalid names and package metadata return `false`. |
+| `getPart(string $name): PartInterface` | Return an ordinary or relationship part without loading its contents. |
+| `getParts(): Traversable` | Iterate ordinary package parts, excluding relationship parts and `[Content_Types].xml`. |
 | `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
 | `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
 | `addPartFromPath(string $name, string $contentType, string $path): PartInterface` | Stage bytes copied from a readable local file. |

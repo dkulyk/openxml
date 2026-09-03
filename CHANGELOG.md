@@ -8,6 +8,13 @@ All notable changes to this project will be documented in this file. The format 
 
 - Successful saves reuse the verified temporary package fingerprint after
   atomic replacement instead of hashing the same output a second time.
+- Relationship parts can be accessed consistently through both `getPart()`
+  and the raw part-reading APIs.
+
+### Fixed
+
+- `hasPart()` returns `false` for package metadata and invalid OPC part names
+  instead of throwing while performing an existence check.
 
 ## [0.6.0] - 2026-09-03
 

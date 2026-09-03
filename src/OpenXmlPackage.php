@@ -138,14 +138,20 @@ final class OpenXmlPackage implements PackageInterface
 
     public function hasPart(string $name): bool
     {
-        return $this->findPartName(PartName::normalize($name)) !== null;
+        try {
+            $name = PartName::normalize($name);
+        } catch (OpenXmlException) {
+            return false;
+        }
+
+        return $this->findPartName($name) !== null;
     }
 
     public function getPart(string $name): PartInterface
     {
         $requestedName = PartName::normalize($name);
         $name = $this->findPartName($requestedName);
-        if ($name === null || PartName::isRelationshipsPart($name)) {
+        if ($name === null) {
             throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
         }
 
