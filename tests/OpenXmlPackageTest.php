@@ -198,6 +198,7 @@ final class OpenXmlPackageTest extends TestCase
             self::assertFileExists($path);
             self::assertSame('image bytes', file_get_contents($path));
         } finally {
+            unset($package);
             if (is_file($filename)) {
                 unlink($filename);
             }
@@ -349,6 +350,7 @@ final class OpenXmlPackageTest extends TestCase
             );
         } finally {
             fclose($stream);
+            unset($package);
             if (is_file($destination)) {
                 unlink($destination);
             }
