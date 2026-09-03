@@ -165,9 +165,11 @@ validated, and moved over the destination. Unchanged entries retain their
 compressed representation through ZIP copy-through. If validation or writing
 fails, the original file remains untouched.
 
-The library detects concurrent source changes before lazy reads and saves. Use
-`discardChanges()` to restore the opened source state. For a focused edit, use a
-callback that saves only after successful completion:
+The library detects concurrent source changes before lazy reads and saves. It
+uses filesystem identity, size, and timestamps for inexpensive read checks, and
+verifies the complete SHA-256 fingerprint before replacing an opened source.
+Use `discardChanges()` to restore the opened source state. For a focused edit,
+use a callback that saves only after successful completion:
 
 ```php
 OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {

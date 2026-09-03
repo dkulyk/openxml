@@ -42,6 +42,17 @@ try {
 
     $started = hrtime(true);
     $stream = $package->getPart('/media/payload.bin')->openStream();
+    $openStreamSeconds = (hrtime(true) - $started) / 1_000_000_000;
+    fclose($stream);
+    printf("Open stream without reading: %.3f ms\n", $openStreamSeconds * 1000);
+
+    $started = hrtime(true);
+    $package->getPart('/document.xml')->getContents();
+    $smallPartSeconds = (hrtime(true) - $started) / 1_000_000_000;
+    printf("Read 11-byte part: %.3f ms\n", $smallPartSeconds * 1000);
+
+    $started = hrtime(true);
+    $stream = $package->getPart('/media/payload.bin')->openStream();
     $hash = hash_init('sha256');
     hash_update_stream($hash, $stream);
     hash_final($hash);

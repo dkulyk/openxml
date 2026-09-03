@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace DK\OpenXml\Internal\Container;
 
-use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageLimitException;
+use DK\OpenXml\Internal\SourceFileState;
 use DK\OpenXml\Internal\StreamOwner;
 use DK\OpenXml\Security\PackageLimits;
 
@@ -32,7 +32,7 @@ final class ZipContainer implements ContainerInterface
     public function __construct(
         private PackageLimits $limits = new PackageLimits(),
         private ?string $sourceFilename = null,
-        private ?string $sourceFingerprint = null,
+        private ?SourceFileState $sourceState = null,
     ) {}
 
     public function __destruct()
@@ -49,13 +49,17 @@ final class ZipContainer implements ContainerInterface
         }
     }
 
-    public static function open(string $filename, ?PackageLimits $limits = null): self
-    {
+    public static function open(
+        string $filename,
+        ?PackageLimits $limits = null,
+        ?SourceFileState $sourceState = null,
+    ): self {
         $limits ??= new PackageLimits();
         $resolvedFilename = realpath($filename);
         if ($resolvedFilename !== false) {
             $filename = $resolvedFilename;
         }
+        $sourceState ??= SourceFileState::capture($filename);
         $archive = new \ZipArchive();
         if ($archive->open($filename) !== true) {
             throw new OpenXmlException(sprintf('Unable to open package "%s".', $filename));
@@ -97,7 +101,8 @@ final class ZipContainer implements ContainerInterface
                 $container->entries[$name] = $entry['size'];
             }
 
-            $container->sourceFingerprint = self::fingerprint($filename);
+            $sourceState->assertUnchanged();
+            $container->sourceState = $sourceState;
             $container->sourceArchive = $archive;
             SourceArchiveRegistry::register($filename, $container);
 
@@ -569,24 +574,9 @@ final class ZipContainer implements ContainerInterface
 
     private function assertSourceUnchanged(): void
     {
-        if ($this->sourceFilename === null || $this->sourceFingerprint === null) {
+        if ($this->sourceState === null) {
             return;
         }
-        if (!hash_equals($this->sourceFingerprint, self::fingerprint($this->sourceFilename))) {
-            throw new ConcurrentModificationException(sprintf(
-                'Package "%s" changed on disk after it was opened.',
-                $this->sourceFilename,
-            ));
-        }
-    }
-
-    private static function fingerprint(string $filename): string
-    {
-        $fingerprint = @hash_file('sha256', $filename);
-        if ($fingerprint === false) {
-            throw new OpenXmlException(sprintf('Unable to fingerprint package "%s".', $filename));
-        }
-
-        return $fingerprint;
+        $this->sourceState->assertUnchanged();
     }
 }
