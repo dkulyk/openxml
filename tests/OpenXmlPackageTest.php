@@ -503,6 +503,18 @@ final class OpenXmlPackageTest extends TestCase
         self::assertCount(2, OpenXmlPackage::open($this->filename)->getRelationships());
     }
 
+    public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $relationships = $package->getRelationships();
+        $packageReference = \WeakReference::create($package);
+
+        unset($relationships, $package);
+
+        self::assertNull($packageReference->get());
+    }
+
     public function testRemovingRelationshipsByResolvedTargetPersists(): void
     {
         $package = OpenXmlPackage::create();
