@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Source files are fully hashed once when opened and immediately before an
+  in-place save. Part reads use filesystem identity and timestamp metadata,
+  avoiding work proportional to the entire package size on every access.
 - `openStream()` now returns a lazy ZIP stream for unchanged parts; seekability
   is no longer guaranteed and callers requiring random access must use
   `getLocalPath()`.

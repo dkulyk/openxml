@@ -937,6 +937,34 @@ final class OpenXmlPackageTest extends TestCase
         $package->getPart('/document.xml')->openStream();
     }
 
+    public function testLazyPartReadRejectsSourceReplacementWithMatchingSizeAndTimestamp(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Windows cannot replace a ZIP file while its source archive is open.');
+        }
+
+        $this->createSavedPackage('<original/>');
+        $package = OpenXmlPackage::open($this->filename);
+        $replacement = $this->filename . '.replacement';
+        $modifiedAt = filemtime($this->filename);
+        self::assertNotFalse($modifiedAt);
+
+        try {
+            self::assertTrue(copy($this->filename, $replacement));
+            self::assertTrue(touch($replacement, $modifiedAt));
+            self::assertSame(filesize($this->filename), filesize($replacement));
+            self::assertTrue(rename($replacement, $this->filename));
+
+            $this->expectException(ConcurrentModificationException::class);
+            $package->getPart('/document.xml')->openStream();
+        } finally {
+            unset($package);
+            if (is_file($replacement)) {
+                unlink($replacement);
+            }
+        }
+    }
+
     public function testNewPackageRequiresSaveAs(): void
     {
         $package = OpenXmlPackage::create();

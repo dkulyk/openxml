@@ -18,6 +18,7 @@ use DK\OpenXml\Internal\Container\ZipContainer;
 use DK\OpenXml\Internal\MaterializationPool;
 use DK\OpenXml\Internal\PackageRepairer;
 use DK\OpenXml\Internal\SignatureInspector;
+use DK\OpenXml\Internal\SourceFileState;
 use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PackageInterface;
 use DK\OpenXml\Packaging\Part;
@@ -97,8 +98,8 @@ final class OpenXmlPackage implements PackageInterface
             );
         }
 
-        $fingerprintBeforeReading = self::fingerprint($sourceFilename);
-        $container = ZipContainer::open($sourceFilename, $limits);
+        $sourceState = SourceFileState::capture($sourceFilename);
+        $container = ZipContainer::open($sourceFilename, $limits, $sourceState);
         self::assertPartNameIntegrity($container);
 
         if (!$container->has('[Content_Types].xml')) {
@@ -109,20 +110,13 @@ final class OpenXmlPackage implements PackageInterface
             $container->read('[Content_Types].xml'),
             $limits->maximumXmlBytes,
         );
-        $fingerprintAfterReading = self::fingerprint($sourceFilename);
-
-        if (!hash_equals($fingerprintBeforeReading, $fingerprintAfterReading)) {
-            throw new ConcurrentModificationException(sprintf(
-                'Package "%s" changed while it was being opened.',
-                $sourceFilename,
-            ));
-        }
+        $sourceState->assertUnchanged();
 
         return new self(
             $container,
             $contentTypes,
             $sourceFilename,
-            $fingerprintAfterReading,
+            $sourceState->fingerprint(),
             limits: $limits,
         );
     }
@@ -902,8 +896,9 @@ final class OpenXmlPackage implements PackageInterface
         );
 
         $this->sourceFilename = self::resolveExistingFilename($filename);
-        $this->sourceFingerprint = self::fingerprint($this->sourceFilename);
-        $this->container = ZipContainer::open($this->sourceFilename, $this->limits);
+        $sourceState = SourceFileState::capture($this->sourceFilename);
+        $this->sourceFingerprint = $sourceState->fingerprint();
+        $this->container = ZipContainer::open($this->sourceFilename, $this->limits, $sourceState);
         $this->rebuildPartNameIndex();
         ++$this->contentRevision;
         $this->changed = false;
