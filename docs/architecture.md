@@ -33,6 +33,11 @@ caller closes it. Unchanged entries also use ZIP copy-through during a save,
 preserving their compressed representation. Complete output is validated in a
 same-directory temporary file before atomic replacement.
 
+A weak internal registry coordinates containers for the same source path. Before
+replacement it closes idle archives held by this process and rejects the write if
+any container still has an active source stream. The registry does not extend a
+container's lifetime.
+
 Unchanged ZIP-backed parts can expose a native `zip://` URI to deferred
 path-based consumers. When an entry is staged or a local path is required, the
 internal materialization pool copies it to private temporary storage. This pool

@@ -301,6 +301,33 @@ final class OpenXmlPackageTest extends TestCase
         );
     }
 
+    public function testSourceStreamFromAnotherPackageInstanceBlocksReplacement(): void
+    {
+        $editor = OpenXmlPackage::create();
+        $editor->addPart('/document.xml', 'application/xml', '<original/>');
+        $editor->saveAs($this->filename);
+
+        $editor = OpenXmlPackage::open($this->filename);
+        $reader = OpenXmlPackage::open($this->filename);
+        $stream = $reader->getPart('/document.xml')->openStream();
+        $editor->getPart('/document.xml')->setContents('<updated/>');
+
+        try {
+            $editor->save();
+            self::fail('A source stream from another package instance should block replacement.');
+        } catch (OpenXmlException $exception) {
+            self::assertSame(
+                'Close all open part streams before replacing the source package.',
+                $exception->getMessage(),
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $editor->save();
+        self::assertSame('<updated/>', OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents());
+    }
+
     public function testPackageCanBeSavedElsewhereWhileASourceStreamIsOpen(): void
     {
         $destination = $this->filename . '-copy.docx';

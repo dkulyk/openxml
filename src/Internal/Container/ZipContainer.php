@@ -37,6 +37,9 @@ final class ZipContainer implements ContainerInterface
 
     public function __destruct()
     {
+        if ($this->sourceFilename !== null) {
+            SourceArchiveRegistry::unregister($this->sourceFilename, $this);
+        }
         $this->closeSourceArchive();
 
         foreach ($this->staged as $contents) {
@@ -92,6 +95,7 @@ final class ZipContainer implements ContainerInterface
 
             $container->sourceFingerprint = self::fingerprint($filename);
             $container->sourceArchive = $archive;
+            SourceArchiveRegistry::register($filename, $container);
 
             return $container;
         } catch (\Throwable $exception) {
@@ -166,10 +170,18 @@ final class ZipContainer implements ContainerInterface
 
     public function prepareForSourceReplacement(): void
     {
-        if ($this->openSourceStreams > 0) {
-            throw new OpenXmlException('Close all open part streams before replacing the source package.');
+        if ($this->sourceFilename !== null) {
+            SourceArchiveRegistry::prepareForReplacement($this->sourceFilename);
         }
+    }
 
+    public function hasOpenSourceStreams(): bool
+    {
+        return $this->openSourceStreams > 0;
+    }
+
+    public function releaseSourceArchive(): void
+    {
         $this->closeSourceArchive();
     }
 
