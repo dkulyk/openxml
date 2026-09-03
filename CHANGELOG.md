@@ -16,9 +16,10 @@ All notable changes to this project will be documented in this file. The format 
   the relationship API to keep the in-memory collection and XML synchronized.
 - Relationship parts are serialized once when read or saved instead of after
   every change, changed collections stay live between calls, and generated ids
-  no longer rescan from `rId1` on every addition. `Relationships`
-  and `Relationship` hold their package weakly; `getTargetPart()` throws once
-  the package has been released instead of keeping it alive.
+  no longer rescan from `rId1` on every addition. `Relationships` and
+  `Relationship` hold their package weakly: operations that need it, such as
+  `getTargetPart()`, `create()`, and `retarget()`, throw once the package has
+  been released instead of keeping it alive.
 - Relationships can be added before their source part exists. `validate()` and
   saving report relationship parts whose source part never arrived, instead of
   `getRelationships()` rejecting the source immediately.

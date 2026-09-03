@@ -18,7 +18,11 @@ final class Relationships implements \IteratorAggregate, \Countable
     /** @var array<string, RelationshipInterface> */
     private array $relationships = [];
 
-    /** Lowest rId number that may still be free; reset to 1 whenever an id is removed. */
+    /**
+     * Where nextId() resumes scanning. Every lower rId number is taken. The last
+     * issued number is deliberately rechecked so a failed add() can reuse it.
+     * Reset to 1 whenever an id is removed.
+     */
     private int $nextIdNumber = 1;
 
     /** @var null|\WeakReference<OpenXmlPackage> */

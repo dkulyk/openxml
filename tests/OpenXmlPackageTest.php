@@ -673,7 +673,6 @@ final class OpenXmlPackageTest extends TestCase
         $package = OpenXmlPackage::create();
         $package->addPart('/document.xml', 'application/xml', '<document/>');
         $relationship = $package->addRelationship('urn:document', 'document.xml');
-        $relationships = $package->getRelationships();
         $packageReference = \WeakReference::create($package);
 
         unset($package);
@@ -682,7 +681,6 @@ final class OpenXmlPackageTest extends TestCase
         $this->expectException(OpenXmlException::class);
         $this->expectExceptionMessage('has been released');
         $relationship->getTargetPart();
-        unset($relationships);
     }
 
     public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
