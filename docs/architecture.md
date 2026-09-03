@@ -40,9 +40,10 @@ replacement it closes idle archives held by this process and rejects the write i
 any container still has an active source stream. The registry does not extend a
 container's lifetime.
 
-`SourceFileState` captures one full fingerprint while a package is opened. Lazy
-reads compare inexpensive filesystem metadata, while an in-place save compares
-the complete fingerprint immediately before atomic replacement.
+`SourceFileState` records the file identity, size, and timestamps while a
+package is opened. Lazy reads, the deferred reopen after a save, and an
+in-place save immediately before atomic replacement all compare that metadata;
+the package never hashes its source or output.
 
 Unchanged ZIP-backed parts can expose a native `zip://` URI to deferred
 path-based consumers. When an entry is staged or a local path is required, the

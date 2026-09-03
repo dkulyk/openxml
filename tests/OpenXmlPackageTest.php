@@ -1155,6 +1155,17 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame('<changed/>', OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents());
     }
 
+    public function testInPlaceSaveRejectsASourceRewrittenAfterOpening(): void
+    {
+        $this->createSavedPackage('<original/>');
+        $package = OpenXmlPackage::open($this->filename);
+        $package->getPart('/document.xml')->setContents('<edited/>');
+        file_put_contents($this->filename, 'rewritten outside the package');
+
+        $this->expectException(ConcurrentModificationException::class);
+        $package->save();
+    }
+
     public function testLazyPartReadRejectsAChangedSourcePackage(): void
     {
         $this->createSavedPackage('<original/>');

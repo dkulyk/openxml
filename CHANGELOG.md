@@ -12,6 +12,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- **Breaking:** the source package is no longer hashed with SHA-256 when it is
+  opened, and the written output is no longer hashed before it replaces the
+  source. Concurrent-modification checks before lazy reads and saves now rely
+  only on file identity, size, and second-resolution timestamps, which already
+  guarded every read. Lazily opening a 16 MiB package dropped from about
+  44 ms to under 1 ms, and its copy-through save from about 66 ms to about
+  23 ms.
 - New packages declare `Default Extension="xml"` as `application/xml` alongside
   `rels`, and adding or moving a part whose content type already matches the
   default for its extension no longer writes an `Override`.

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace DK\OpenXml;
 
-use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\EncryptedPackageException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageValidationException;
@@ -49,14 +48,14 @@ final class OpenXmlPackage implements PackageInterface
 
     private int $contentRevision = 0;
 
-    /** Source state of a saved package whose container is reopened on first access. */
-    private ?SourceFileState $pendingSource = null;
+    /** A saved package reopens its container on first access. */
+    private bool $reopenPending = false;
 
     private function __construct(
         private ?ContainerInterface $container,
         private ContentTypes $contentTypes,
         private ?string $sourceFilename = null,
-        private ?string $sourceFingerprint = null,
+        private ?SourceFileState $sourceState = null,
         private bool $changed = false,
         private PackageLimits $limits = new PackageLimits(),
     ) {
@@ -120,7 +119,7 @@ final class OpenXmlPackage implements PackageInterface
             $container,
             $contentTypes,
             $sourceFilename,
-            $sourceState->fingerprint(),
+            $sourceState,
             limits: $limits,
         );
     }
@@ -735,10 +734,10 @@ final class OpenXmlPackage implements PackageInterface
             : self::open($this->sourceFilename, $this->limits);
 
         $this->container = $freshPackage->container;
-        $this->pendingSource = null;
+        $this->reopenPending = false;
         $this->contentTypes = $freshPackage->contentTypes;
         $this->sourceFilename = $freshPackage->sourceFilename;
-        $this->sourceFingerprint = $freshPackage->sourceFingerprint;
+        $this->sourceState = $freshPackage->sourceState;
         $this->partNames = $freshPackage->partNames;
         $this->relationships = [];
         ++$this->contentRevision;
@@ -755,7 +754,7 @@ final class OpenXmlPackage implements PackageInterface
             return;
         }
 
-        $this->persist($this->sourceFilename, $this->sourceFingerprint);
+        $this->persist($this->sourceFilename, $this->sourceState);
     }
 
     public function saveAs(string $filename): void
@@ -764,11 +763,7 @@ final class OpenXmlPackage implements PackageInterface
         $overwritesSource = $resolvedDestination !== false
             && $resolvedDestination === $this->sourceFilename;
 
-        $expectedFingerprint = $overwritesSource
-            ? $this->sourceFingerprint
-            : null;
-
-        $this->persist($filename, $expectedFingerprint);
+        $this->persist($filename, $overwritesSource ? $this->sourceState : null);
     }
 
     /**
@@ -887,7 +882,7 @@ final class OpenXmlPackage implements PackageInterface
         return $changes;
     }
 
-    private function persist(string $filename, ?string $expectedFingerprint = null): void
+    private function persist(string $filename, ?SourceFileState $expectedSource): void
     {
         $existingDestination = realpath($filename);
         if ($existingDestination !== false) {
@@ -901,16 +896,8 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->container()->write('[Content_Types].xml', $this->contentTypes->toXml());
 
-        $beforeReplace = function () use ($filename, $expectedFingerprint): void {
-            if ($expectedFingerprint !== null) {
-                $currentFingerprint = self::fingerprint($filename);
-                if (!hash_equals($expectedFingerprint, $currentFingerprint)) {
-                    throw new ConcurrentModificationException(sprintf(
-                        'Package "%s" changed on disk after it was opened.',
-                        $filename,
-                    ));
-                }
-            }
+        $beforeReplace = static function () use ($filename, $expectedSource): void {
+            $expectedSource?->assertUnchanged();
 
             $existingDestination = realpath($filename);
             if ($existingDestination !== false) {
@@ -918,29 +905,26 @@ final class OpenXmlPackage implements PackageInterface
             }
         };
 
-        $writtenFingerprint = null;
         AtomicFileWriter::replace(
             $filename,
-            function (string $temporaryFilename) use (&$writtenFingerprint): void {
+            function (string $temporaryFilename): void {
                 $this->container()->saveAs($temporaryFilename);
-                $writtenFingerprint = $this->verifyWrittenPackage($temporaryFilename);
+                $this->verifyWrittenPackage($temporaryFilename);
             },
             $beforeReplace,
         );
 
         $this->sourceFilename = self::resolveExistingFilename($filename);
-        $sourceState = SourceFileState::capture($this->sourceFilename, $writtenFingerprint);
-        $this->sourceFingerprint = $sourceState->fingerprint();
+        $this->sourceState = SourceFileState::capture($this->sourceFilename);
         // Reopened on first access, so a package that is saved and released never reads its output back.
         $this->container = null;
-        $this->pendingSource = $sourceState;
+        $this->reopenPending = true;
         ++$this->contentRevision;
         $this->changed = false;
     }
 
-    private function verifyWrittenPackage(string $filename): string
+    private function verifyWrittenPackage(string $filename): void
     {
-        $sourceState = SourceFileState::capture($filename);
         // Entries were validated when staged; only the archive structure and content types are read back.
         $archive = new \ZipArchive();
         if ($archive->open($filename, \ZipArchive::RDONLY) !== true) {
@@ -956,16 +940,14 @@ final class OpenXmlPackage implements PackageInterface
             throw new OpenXmlException(sprintf('Written package "%s" has no [Content_Types].xml.', $filename));
         }
         ContentTypes::fromXml($contentTypesXml, $this->limits->maximumXmlBytes);
-
-        return $sourceState->fingerprint();
     }
 
     private function container(): ContainerInterface
     {
-        if ($this->pendingSource !== null) {
-            $this->pendingSource->assertUnchanged();
-            $this->container = ZipContainer::open((string) $this->sourceFilename, $this->limits, $this->pendingSource);
-            $this->pendingSource = null;
+        if ($this->reopenPending) {
+            $this->sourceState?->assertUnchanged();
+            $this->container = ZipContainer::open((string) $this->sourceFilename, $this->limits, $this->sourceState);
+            $this->reopenPending = false;
             $this->rebuildPartNameIndex();
         }
 
@@ -1097,15 +1079,5 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         return $stream;
-    }
-
-    private static function fingerprint(string $filename): string
-    {
-        $fingerprint = @hash_file('sha256', $filename);
-        if ($fingerprint === false) {
-            throw new OpenXmlException(sprintf('Unable to fingerprint package "%s".', $filename));
-        }
-
-        return $fingerprint;
     }
 }
