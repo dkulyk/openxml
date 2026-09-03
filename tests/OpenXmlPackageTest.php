@@ -640,6 +640,35 @@ final class OpenXmlPackageTest extends TestCase
         $package->saveAs($this->filename);
     }
 
+    public function testChangedRelationshipsStayLiveWithoutACallerReference(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'document.xml');
+        $first = spl_object_id($package->getRelationships());
+        $package->addRelationship('urn:styles', 'styles.xml');
+
+        self::assertSame($first, spl_object_id($package->getRelationships()));
+        self::assertStringContainsString('urn:styles', $package->readPart('/_rels/.rels'));
+    }
+
+    public function testPackageIsReleasedAfterRelationshipChanges(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $relationship = $package->addRelationship('urn:document', 'document.xml');
+        $relationships = $package->getRelationships();
+        $packageReference = \WeakReference::create($package);
+
+        unset($package);
+
+        self::assertNull($packageReference->get());
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('has been released');
+        $relationship->getTargetPart();
+        unset($relationships);
+    }
+
     public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
     {
         $package = OpenXmlPackage::create();

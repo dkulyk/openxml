@@ -18,14 +18,22 @@ final class Relationships implements \IteratorAggregate, \Countable
     /** @var array<string, RelationshipInterface> */
     private array $relationships = [];
 
+    /** Lowest rId number that may still be free; reset to 1 whenever an id is removed. */
+    private int $nextIdNumber = 1;
+
+    /** @var null|\WeakReference<OpenXmlPackage> */
+    private ?\WeakReference $package;
+
     /**
      * @param null|\Closure(self): void $onChange
      */
     public function __construct(
-        private ?OpenXmlPackage $package = null,
+        ?OpenXmlPackage $package = null,
         private ?string $sourcePartName = null,
         private ?\Closure $onChange = null,
-    ) {}
+    ) {
+        $this->package = $package === null ? null : \WeakReference::create($package);
+    }
 
     /**
      * @param null|\Closure(self): void $onChange
@@ -79,7 +87,7 @@ final class Relationships implements \IteratorAggregate, \Countable
             $type,
             $target,
             $external,
-            $this->package,
+            $this->package(),
             $this->sourcePartName,
         );
 
@@ -173,6 +181,7 @@ final class Relationships implements \IteratorAggregate, \Countable
         }
 
         unset($this->relationships[$id]);
+        $this->nextIdNumber = 1;
         $this->notifyChanged();
     }
 
@@ -191,7 +200,7 @@ final class Relationships implements \IteratorAggregate, \Countable
             $current->getType(),
             $target,
             $current->isExternal(),
-            $this->package,
+            $this->package(),
             $this->sourcePartName,
         );
 
@@ -209,6 +218,7 @@ final class Relationships implements \IteratorAggregate, \Countable
         }
 
         if ($matching !== []) {
+            $this->nextIdNumber = 1;
             $this->notifyChanged();
         }
 
@@ -251,12 +261,23 @@ final class Relationships implements \IteratorAggregate, \Countable
 
     private function nextId(): string
     {
-        $number = 1;
+        $number = $this->nextIdNumber;
         while (isset($this->relationships['rId' . $number])) {
             ++$number;
         }
+        $this->nextIdNumber = $number;
 
         return 'rId' . $number;
+    }
+
+    private function package(): ?OpenXmlPackage
+    {
+        if ($this->package === null) {
+            return null;
+        }
+
+        return $this->package->get()
+            ?? throw new OpenXmlException('The package owning these relationships has been released.');
     }
 
     private function notifyChanged(): void

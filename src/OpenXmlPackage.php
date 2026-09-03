@@ -462,10 +462,12 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         $relationshipEntryName = PartName::entry($this->relationshipsPartName($sourcePartName));
-        $onChange = fn(Relationships $relationships) => $this->writeRelationships(
-            $relationships,
-            $sourcePartName,
-        );
+        // Weak: the container keeps changed collections alive through their lazy
+        // writer, so a strong back-reference here would form a cycle.
+        $package = \WeakReference::create($this);
+        $onChange = static function (Relationships $relationships) use ($package, $sourcePartName): void {
+            $package->get()?->writeRelationships($relationships, $sourcePartName);
+        };
 
         $relationships = $this->container->has($relationshipEntryName)
             ? Relationships::fromXml(
@@ -812,7 +814,8 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         $this->contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
-        $this->container->write($relationshipEntryName, $relationships->toXml());
+        // Serialized once on read or save instead of after every change.
+        $this->container->writeLazy($relationshipEntryName, static fn(): string => $relationships->toXml());
         $this->partNames->add($relationshipPartName);
         $this->changed = true;
     }
