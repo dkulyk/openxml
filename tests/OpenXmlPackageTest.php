@@ -113,7 +113,21 @@ final class OpenXmlPackageTest extends TestCase
 
         self::assertTrue($package->hasPart('/_RELS/.RELS'));
         self::assertTrue($package->hasPart('/WORD/_RELS/DOCUMENT.XML.RELS'));
+        self::assertSame('/_rels/.rels', $package->getPart('/_RELS/.RELS')->getName());
+        self::assertSame(
+            $package->readPart('/word/_rels/document.xml.rels'),
+            $package->getPart('/WORD/_RELS/DOCUMENT.XML.RELS')->getContents(),
+        );
         self::assertSame([], $package->validate());
+    }
+
+    public function testHasPartReturnsFalseForPackageMetadataAndInvalidNames(): void
+    {
+        $package = OpenXmlPackage::create();
+
+        self::assertFalse($package->hasPart('[Content_Types].xml'));
+        self::assertFalse($package->hasPart('/invalid/'));
+        self::assertFalse($package->hasPart(''));
     }
 
     public function testPartCanBeAddedAndReadAsAStream(): void
