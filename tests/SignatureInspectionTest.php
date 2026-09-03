@@ -87,9 +87,10 @@ final class SignatureInspectionTest extends TestCase
 
         $issues = $package->validate();
 
-        self::assertCount(2, $issues);
+        self::assertCount(3, $issues);
         self::assertStringContainsString('signature preservation is not supported', $issues[0]);
-        self::assertStringContainsString('targets a missing part', $issues[1]);
+        self::assertStringContainsString('Digital signature: The digital-signature origin relationship targets a missing part', $issues[1]);
+        self::assertStringContainsString('Relationship "rId1" from the package targets missing part', $issues[2]);
     }
 
     public function testExternalOriginRelationshipIsMalformed(): void
