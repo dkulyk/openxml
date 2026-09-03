@@ -18,6 +18,11 @@ All notable changes to this project will be documented in this file. The format 
 - Part-name validation remembers names it already accepted, so building,
   validating, and saving a 193-part package dropped from about 10.6 ms to
   about 6.4 ms. The cache is bounded and is reset after 4096 names.
+- Saving verifies the written archive by reading back only its structure and
+  `[Content_Types].xml`, and reopens the saved package on its first part access
+  instead of immediately, so a package that is saved and released never reads
+  its output back. Validating and saving a 193-part package dropped from about
+  6.5 ms to about 5.4 ms.
 
 ## [0.7.0] - 2026-09-04
 
