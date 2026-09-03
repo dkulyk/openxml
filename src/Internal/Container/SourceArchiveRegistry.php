@@ -16,25 +16,33 @@ final class SourceArchiveRegistry
 
     public static function register(string $filename, ZipContainer $container): void
     {
+        $filename = self::canonicalFilename($filename);
         self::$containers[$filename][spl_object_id($container)] = \WeakReference::create($container);
     }
 
     public static function unregister(string $filename, ZipContainer $container): void
     {
+        $filename = self::canonicalFilename($filename);
         unset(self::$containers[$filename][spl_object_id($container)]);
         if (isset(self::$containers[$filename]) && self::$containers[$filename] === []) {
             unset(self::$containers[$filename]);
         }
     }
 
-    public static function prepareForReplacement(string $filename): void
+    public static function assertCanReplace(string $filename): void
     {
-        $containers = self::liveContainers($filename);
-        foreach ($containers as $container) {
+        foreach (self::liveContainers(self::canonicalFilename($filename)) as $container) {
             if ($container->hasOpenSourceStreams()) {
                 throw new OpenXmlException('Close all open part streams before replacing the source package.');
             }
         }
+    }
+
+    public static function prepareForReplacement(string $filename): void
+    {
+        $filename = self::canonicalFilename($filename);
+        self::assertCanReplace($filename);
+        $containers = self::liveContainers($filename);
         foreach ($containers as $container) {
             $container->releaseSourceArchive();
         }
@@ -57,5 +65,12 @@ final class SourceArchiveRegistry
         }
 
         return $containers;
+    }
+
+    private static function canonicalFilename(string $filename): string
+    {
+        $resolvedFilename = realpath($filename);
+
+        return $resolvedFilename !== false ? $resolvedFilename : $filename;
     }
 }

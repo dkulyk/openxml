@@ -29,7 +29,5 @@ interface ContainerInterface
 
     public function move(string $source, string $destination): void;
 
-    public function prepareForSourceReplacement(): void;
-
     public function saveAs(string $filename): void;
 }

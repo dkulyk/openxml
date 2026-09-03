@@ -13,6 +13,7 @@ use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Container\ContainerInterface;
+use DK\OpenXml\Internal\Container\SourceArchiveRegistry;
 use DK\OpenXml\Internal\Container\ZipContainer;
 use DK\OpenXml\Internal\MaterializationPool;
 use DK\OpenXml\Internal\PackageRepairer;
@@ -862,6 +863,11 @@ final class OpenXmlPackage implements PackageInterface
 
     private function persist(string $filename, ?string $expectedFingerprint = null): void
     {
+        $existingDestination = realpath($filename);
+        if ($existingDestination !== false) {
+            SourceArchiveRegistry::assertCanReplace($existingDestination);
+        }
+
         $issues = $this->validate();
         if ($issues !== []) {
             throw new PackageValidationException($issues);
@@ -869,9 +875,8 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->container->write('[Content_Types].xml', $this->contentTypes->toXml());
 
-        $beforeReplace = $expectedFingerprint === null
-            ? null
-            : function () use ($filename, $expectedFingerprint): void {
+        $beforeReplace = function () use ($filename, $expectedFingerprint): void {
+            if ($expectedFingerprint !== null) {
                 $currentFingerprint = self::fingerprint($filename);
                 if (!hash_equals($expectedFingerprint, $currentFingerprint)) {
                     throw new ConcurrentModificationException(sprintf(
@@ -879,9 +884,13 @@ final class OpenXmlPackage implements PackageInterface
                         $filename,
                     ));
                 }
+            }
 
-                $this->container->prepareForSourceReplacement();
-            };
+            $existingDestination = realpath($filename);
+            if ($existingDestination !== false) {
+                SourceArchiveRegistry::prepareForReplacement($existingDestination);
+            }
+        };
 
         AtomicFileWriter::replace(
             $filename,

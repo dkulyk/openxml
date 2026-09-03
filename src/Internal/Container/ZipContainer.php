@@ -52,6 +52,10 @@ final class ZipContainer implements ContainerInterface
     public static function open(string $filename, ?PackageLimits $limits = null): self
     {
         $limits ??= new PackageLimits();
+        $resolvedFilename = realpath($filename);
+        if ($resolvedFilename !== false) {
+            $filename = $resolvedFilename;
+        }
         $archive = new \ZipArchive();
         if ($archive->open($filename) !== true) {
             throw new OpenXmlException(sprintf('Unable to open package "%s".', $filename));
@@ -157,22 +161,7 @@ final class ZipContainer implements ContainerInterface
             throw new OpenXmlException(sprintf('Unable to bind ZIP entry stream "%s" to its container.', $name));
         }
 
-        try {
-            $this->assertSourceUnchanged();
-        } catch (\Throwable $exception) {
-            fclose($stream);
-
-            throw $exception;
-        }
-
         return $stream;
-    }
-
-    public function prepareForSourceReplacement(): void
-    {
-        if ($this->sourceFilename !== null) {
-            SourceArchiveRegistry::prepareForReplacement($this->sourceFilename);
-        }
     }
 
     public function hasOpenSourceStreams(): bool

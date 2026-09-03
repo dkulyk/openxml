@@ -14,6 +14,15 @@ All notable changes to this project will be documented in this file. The format 
 - Local path-based APIs for adding and replacing large parts without first
   loading their contents into PHP strings.
 
+### Changed
+
+- `openStream()` now returns a lazy ZIP stream for unchanged parts; seekability
+  is no longer guaranteed and callers requiring random access must use
+  `getLocalPath()`.
+- Source archives remain open for the package lifetime and are shared by its
+  streams. Source replacement is rejected while a relevant stream is open;
+  this also makes file-handle lifetime observable on Windows.
+
 ## [0.5.0] - 2026-09-02
 
 ### Added

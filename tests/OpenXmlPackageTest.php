@@ -357,6 +357,36 @@ final class OpenXmlPackageTest extends TestCase
         }
     }
 
+    public function testSaveAsCanReplaceAFileOpenedByAnotherIdlePackage(): void
+    {
+        $destination = tempnam(sys_get_temp_dir(), 'openxml-destination-');
+        self::assertNotFalse($destination);
+
+        try {
+            $destinationPackage = OpenXmlPackage::create();
+            $destinationPackage->addPart('/document.xml', 'application/xml', '<old destination/>');
+            $destinationPackage->saveAs($destination);
+            $observer = OpenXmlPackage::open($destination);
+
+            $source = OpenXmlPackage::create();
+            $source->addPart('/document.xml', 'application/xml', '<new destination/>');
+            $source->saveAs($destination);
+
+            self::assertSame(
+                '<new destination/>',
+                OpenXmlPackage::open($destination)->getPart('/document.xml')->getContents(),
+            );
+
+            $this->expectException(ConcurrentModificationException::class);
+            $observer->getPart('/document.xml')->getContents();
+        } finally {
+            unset($destinationPackage, $observer, $source);
+            if (is_file($destination)) {
+                unlink($destination);
+            }
+        }
+    }
+
     public function testPartContentsCanBeCopiedFromLocalPaths(): void
     {
         $source = tempnam(sys_get_temp_dir(), 'openxml-source-');
