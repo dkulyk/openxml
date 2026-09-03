@@ -9,6 +9,7 @@ use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Exception\PackageValidationException;
 use DK\OpenXml\OpenXmlPackage;
 use DK\OpenXml\Packaging\ContentTypes;
+use DK\OpenXml\Packaging\PartName;
 use DK\OpenXml\Packaging\Relationships;
 use DK\OpenXml\Security\PackageLimits;
 use PHPUnit\Framework\TestCase;
@@ -128,6 +129,16 @@ final class SecurityTest extends TestCase
         $this->expectException(OpenXmlException::class);
         $this->expectExceptionMessage('Invalid OPC part name');
         OpenXmlPackage::open($this->filename);
+    }
+
+    public function testValidatedPartNamesDoNotVouchForTheirVariants(): void
+    {
+        self::assertSame('/word/document.xml', PartName::normalize('/word/document.xml'));
+        self::assertSame('/word/document.xml', PartName::normalize('/word/document.xml'));
+
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Invalid OPC part name');
+        PartName::normalize('/word/document.xml/');
     }
 
     public function testSuspiciousCompressionRatioIsRejectedBeforeExtraction(): void

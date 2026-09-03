@@ -10,8 +10,14 @@ final class PartName
 {
     private function __construct() {}
 
+    /** @var array<string, true> */
+    private static array $validated = [];
+
     public static function normalize(string $name): string
     {
+        if (isset(self::$validated[$name])) {
+            return $name;
+        }
         if (
             $name === ''
             || !str_starts_with($name, '/')
@@ -27,6 +33,12 @@ final class PartName
         foreach (explode('/', substr($name, 1)) as $segment) {
             self::validateSegment($segment, $name);
         }
+        // Names repeat dozens of times per part during a build and save; the
+        // cache is bounded so long-lived workers do not accumulate every name.
+        if (count(self::$validated) >= 4096) {
+            self::$validated = [];
+        }
+        self::$validated[$name] = true;
 
         return $name;
     }

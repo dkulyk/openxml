@@ -100,6 +100,23 @@ try {
         );
         unset($registrationPackage);
     }
+
+    $savePackage = OpenXmlPackage::create();
+    $savePackage->addPart('/ppt/presentation.xml', 'application/xml', '<presentation/>');
+    for ($index = 1; $index <= 64; ++$index) {
+        $savePackage->addPart(sprintf('/ppt/slides/slide%d.xml', $index), 'application/xml', '<slide/>');
+        $savePackage->addPart(sprintf('/ppt/media/image%d.png', $index), 'image/png', 'png');
+        $savePackage->addPart(sprintf('/ppt/notesSlides/notesSlide%d.xml', $index), 'application/xml', '<notes/>');
+        $savePackage->addRelationship('urn:slide', sprintf('slides/slide%d.xml', $index), sourcePartName: '/ppt/presentation.xml');
+        $savePackage->addRelationship('urn:image', sprintf('../media/image%d.png', $index), sourcePartName: sprintf('/ppt/slides/slide%d.xml', $index));
+        $savePackage->addRelationship('urn:notes', sprintf('../notesSlides/notesSlide%d.xml', $index), sourcePartName: sprintf('/ppt/slides/slide%d.xml', $index));
+    }
+    $started = hrtime(true);
+    $savePackage->validate();
+    $savePackage->saveAs($copy);
+    $savePackageSeconds = (hrtime(true) - $started) / 1_000_000_000;
+    printf("193-part package validate + save: %.3f ms\n", $savePackageSeconds * 1000);
+    unset($savePackage);
 } finally {
     fclose($payload);
     if (is_file($filename)) {
