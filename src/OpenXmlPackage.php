@@ -67,6 +67,7 @@ final class OpenXmlPackage implements PackageInterface
         $limits ??= new PackageLimits();
         $contentTypes = new ContentTypes();
         $contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
+        $contentTypes->setDefault('xml', 'application/xml');
         // Staged first so it becomes the first ZIP entry, as OPC expects for streaming readers.
         $container = new ZipContainer($limits);
         $container->write('[Content_Types].xml', $contentTypes->toXml());
@@ -191,7 +192,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->assertPartNameAvailable($name, true);
 
         $this->container->write(PartName::entry($name), $contents);
-        $this->contentTypes->setOverride($name, $contentType);
+        $this->registerContentType($name, $contentType);
         $this->partNames->add($name);
         ++$this->contentRevision;
         $this->changed = true;
@@ -208,7 +209,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->assertPartNameAvailable($name, true);
 
         $this->container->writeStream(PartName::entry($name), $stream);
-        $this->contentTypes->setOverride($name, $contentType);
+        $this->registerContentType($name, $contentType);
         $this->partNames->add($name);
         ++$this->contentRevision;
         $this->changed = true;
@@ -299,6 +300,12 @@ final class OpenXmlPackage implements PackageInterface
         } finally {
             fclose($stream);
         }
+    }
+
+    public function setDefaultContentType(string $extension, string $contentType): void
+    {
+        $this->contentTypes->setDefault($extension, $contentType);
+        $this->changed = true;
     }
 
     public function removePart(string $name): void
@@ -418,7 +425,7 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         $this->contentTypes->removeOverride($source);
-        $this->contentTypes->setOverride($destination, $contentType);
+        $this->registerContentType($destination, $contentType);
         $this->partNames->remove($source);
         $this->partNames->add($destination);
         unset($this->relationships[strtolower($source)], $this->relationships[strtolower($destination)]);
@@ -965,6 +972,15 @@ final class OpenXmlPackage implements PackageInterface
                     ));
                 }
             }
+        }
+    }
+
+    /** Write an override only when no default already yields the same type. */
+    private function registerContentType(string $name, string $contentType): void
+    {
+        $this->contentTypes->removeOverride($name);
+        if (strcasecmp((string) $this->contentTypes->getForPart($name), $contentType) !== 0) {
+            $this->contentTypes->setOverride($name, $contentType);
         }
     }
 

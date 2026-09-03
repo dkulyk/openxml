@@ -444,6 +444,39 @@ final class OpenXmlPackageTest extends TestCase
         }
     }
 
+    public function testDefaultContentTypeReplacesPerPartOverrides(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->setDefaultContentType('svg', 'image/svg+xml');
+        $package->addPart('/ppt/media/image1.svg', 'image/svg+xml', '<svg/>');
+        $package->addPart('/ppt/media/photo.png', 'image/png', 'png');
+        $package->movePart('/ppt/media/image1.svg', '/ppt/media/image2.svg');
+        $package->saveAs($this->filename);
+        unset($package);
+
+        $reopened = OpenXmlPackage::open($this->filename);
+        $contentTypes = $this->readRawEntry('[Content_Types].xml');
+        self::assertStringContainsString('<Default Extension="svg" ContentType="image/svg+xml"/>', $contentTypes);
+        self::assertStringNotContainsString('image2.svg', $contentTypes);
+        self::assertStringContainsString('<Override PartName="/ppt/media/photo.png" ContentType="image/png"/>', $contentTypes);
+        self::assertSame('image/svg+xml', $reopened->getPart('/ppt/media/image2.svg')->getContentType());
+        self::assertSame([], $reopened->validate());
+    }
+
+    public function testXmlDefaultCoversGenericXmlPartsOnly(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/custom.xml', 'application/xml', '<custom/>');
+        $package->addPart('/word/document.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml', '<w/>');
+        $package->saveAs($this->filename);
+
+        $contentTypes = $this->readRawEntry('[Content_Types].xml');
+        self::assertStringContainsString('<Default Extension="xml" ContentType="application/xml"/>', $contentTypes);
+        self::assertStringNotContainsString('PartName="/custom.xml"', $contentTypes);
+        self::assertStringContainsString('PartName="/word/document.xml"', $contentTypes);
+        self::assertSame('application/xml', $package->getPart('/custom.xml')->getContentType());
+    }
+
     public function testContentTypesIsTheFirstEntryOfANewPackage(): void
     {
         $package = OpenXmlPackage::create();
@@ -1143,6 +1176,21 @@ final class OpenXmlPackageTest extends TestCase
 
         $this->expectException(OpenXmlException::class);
         $package->save();
+    }
+
+    private function readRawEntry(string $entryName): string
+    {
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename));
+
+        try {
+            $contents = $archive->getFromName($entryName);
+            self::assertNotFalse($contents);
+
+            return $contents;
+        } finally {
+            $archive->close();
+        }
     }
 
     private function firstEntryName(): string
