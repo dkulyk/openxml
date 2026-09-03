@@ -17,6 +17,7 @@ use DK\OpenXml\Internal\Container\SourceArchiveRegistry;
 use DK\OpenXml\Internal\Container\ZipContainer;
 use DK\OpenXml\Internal\MaterializationPool;
 use DK\OpenXml\Internal\PackageRepairer;
+use DK\OpenXml\Internal\PartNameIndex;
 use DK\OpenXml\Internal\SignatureInspector;
 use DK\OpenXml\Internal\SourceFileState;
 use DK\OpenXml\Packaging\ContentTypes;
@@ -39,8 +40,7 @@ use DK\OpenXml\Signature\SignatureStatus;
 
 final class OpenXmlPackage implements PackageInterface
 {
-    /** @var array<string, string> Lowercase part name => stored part name. */
-    private array $partNames = [];
+    private PartNameIndex $partNames;
 
     /** @var array<string, \WeakReference<Relationships>> Source part name ('' for the package) => live collection. */
     private array $relationships = [];
@@ -57,6 +57,7 @@ final class OpenXmlPackage implements PackageInterface
         private bool $changed = false,
         private PackageLimits $limits = new PackageLimits(),
     ) {
+        $this->partNames = new PartNameIndex();
         $this->materializations = new MaterializationPool();
         $this->rebuildPartNameIndex();
     }
@@ -192,7 +193,7 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->container->write(PartName::entry($name), $contents);
         $this->contentTypes->setOverride($name, $contentType);
-        $this->partNames[strtolower($name)] = $name;
+        $this->partNames->add($name);
         ++$this->contentRevision;
         $this->changed = true;
 
@@ -209,7 +210,7 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->container->writeStream(PartName::entry($name), $stream);
         $this->contentTypes->setOverride($name, $contentType);
-        $this->partNames[strtolower($name)] = $name;
+        $this->partNames->add($name);
         ++$this->contentRevision;
         $this->changed = true;
 
@@ -374,11 +375,9 @@ final class OpenXmlPackage implements PackageInterface
         $this->container->remove(PartName::entry($name));
         $this->container->remove(PartName::entry($relationshipPartName));
         $this->contentTypes->removeOverride($name);
-        unset(
-            $this->partNames[strtolower($name)],
-            $this->partNames[strtolower($relationshipPartName)],
-            $this->relationships[$name],
-        );
+        $this->partNames->remove($name);
+        $this->partNames->remove($relationshipPartName);
+        unset($this->relationships[$name]);
         ++$this->contentRevision;
         $this->changed = true;
     }
@@ -422,14 +421,15 @@ final class OpenXmlPackage implements PackageInterface
                 PartName::entry($sourceRelationshipPart),
                 PartName::entry($destinationRelationshipPart),
             );
-            unset($this->partNames[strtolower($sourceRelationshipPart)]);
-            $this->partNames[strtolower($destinationRelationshipPart)] = $destinationRelationshipPart;
+            $this->partNames->remove($sourceRelationshipPart);
+            $this->partNames->add($destinationRelationshipPart);
         }
 
         $this->contentTypes->removeOverride($source);
         $this->contentTypes->setOverride($destination, $contentType);
-        unset($this->partNames[strtolower($source)], $this->relationships[$source], $this->relationships[$destination]);
-        $this->partNames[strtolower($destination)] = $destination;
+        $this->partNames->remove($source);
+        $this->partNames->add($destination);
+        unset($this->relationships[$source], $this->relationships[$destination]);
 
         foreach ($relationshipChanges as [$relationshipSource, $id, $target]) {
             $this->getRelationships($relationshipSource)->retarget($id, $target);
@@ -810,7 +810,7 @@ final class OpenXmlPackage implements PackageInterface
 
         if (count($relationships) === 0) {
             $this->container->remove($relationshipEntryName);
-            unset($this->partNames[strtolower($relationshipPartName)]);
+            $this->partNames->remove($relationshipPartName);
             $this->changed = true;
 
             return;
@@ -818,7 +818,7 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
         $this->container->write($relationshipEntryName, $relationships->toXml());
-        $this->partNames[strtolower($relationshipPartName)] = $relationshipPartName;
+        $this->partNames->add($relationshipPartName);
         $this->changed = true;
     }
 
@@ -932,26 +932,7 @@ final class OpenXmlPackage implements PackageInterface
         bool $allowExactMatch,
         ?string $excludedPartName = null,
     ): void {
-        foreach ($this->container->entries() as $entryName) {
-            if ($entryName === '[Content_Types].xml') {
-                continue;
-            }
-
-            $existingPartName = '/' . $entryName;
-            if ($excludedPartName !== null && PartName::equivalent($existingPartName, $excludedPartName)) {
-                continue;
-            }
-            if ($allowExactMatch && $existingPartName === $partName) {
-                continue;
-            }
-            if (PartName::conflicts($existingPartName, $partName)) {
-                throw new OpenXmlException(sprintf(
-                    'OPC part name "%s" conflicts with existing part "%s".',
-                    $partName,
-                    $existingPartName,
-                ));
-            }
-        }
+        $this->partNames->assertAvailable($partName, $allowExactMatch, $excludedPartName);
     }
 
     private static function assertPartNameIntegrity(ContainerInterface $container): void
@@ -992,7 +973,7 @@ final class OpenXmlPackage implements PackageInterface
 
     private function findPartName(string $name): ?string
     {
-        return $this->partNames[strtolower($name)] ?? null;
+        return $this->partNames->find($name);
     }
 
     private function existingPartName(string $name): string
@@ -1008,7 +989,7 @@ final class OpenXmlPackage implements PackageInterface
 
     private function rebuildPartNameIndex(): void
     {
-        $this->partNames = [];
+        $this->partNames = new PartNameIndex();
         $this->relationships = [];
         foreach ($this->container->entries() as $entryName) {
             if ($entryName === '[Content_Types].xml') {
@@ -1016,7 +997,7 @@ final class OpenXmlPackage implements PackageInterface
             }
 
             $partName = '/' . $entryName;
-            $this->partNames[strtolower($partName)] = $partName;
+            $this->partNames->add($partName);
         }
     }
 

@@ -69,6 +69,27 @@ try {
     $package->saveAs($copy);
     $saveSeconds = (hrtime(true) - $started) / 1_000_000_000;
     printf("Copy-through save: %.3f ms\n", $saveSeconds * 1000);
+
+    echo "Part registration:\n";
+    foreach ([50, 100, 200, 400, 800] as $partCount) {
+        $registrationPackage = OpenXmlPackage::create();
+        $started = hrtime(true);
+        for ($index = 0; $index < $partCount; ++$index) {
+            $registrationPackage->addPart(
+                sprintf('/parts/part-%04d.xml', $index),
+                'application/xml',
+                '<part/>',
+            );
+        }
+        $registrationSeconds = (hrtime(true) - $started) / 1_000_000_000;
+        printf(
+            "  %4d parts: %.3f ms total, %.3f ms/part\n",
+            $partCount,
+            $registrationSeconds * 1000,
+            $registrationSeconds * 1000 / $partCount,
+        );
+        unset($registrationPackage);
+    }
 } finally {
     fclose($payload);
     if (is_file($filename)) {
