@@ -272,11 +272,7 @@ final class OpenXmlPackage implements PackageInterface
 
     public function writePart(string $name, string $contents): void
     {
-        $requestedName = PartName::normalize($name);
-        $name = $this->findPartName($requestedName);
-        if ($name === null) {
-            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
-        }
+        $name = $this->existingWritablePartName($name);
 
         $this->container->write(PartName::entry($name), $contents);
         ++$this->contentRevision;
@@ -286,11 +282,7 @@ final class OpenXmlPackage implements PackageInterface
     /** @param resource $stream */
     public function writePartFromStream(string $name, $stream): void
     {
-        $requestedName = PartName::normalize($name);
-        $name = $this->findPartName($requestedName);
-        if ($name === null) {
-            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
-        }
+        $name = $this->existingWritablePartName($name);
 
         $this->container->writeStream(PartName::entry($name), $stream);
         ++$this->contentRevision;
@@ -299,6 +291,7 @@ final class OpenXmlPackage implements PackageInterface
 
     public function writePartFromPath(string $name, string $path): void
     {
+        $name = $this->existingWritablePartName($name);
         $stream = self::openReadableFile($path);
 
         try {
@@ -1001,6 +994,16 @@ final class OpenXmlPackage implements PackageInterface
         $name = $this->findPartName($requestedName);
         if ($name === null) {
             throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
+        }
+
+        return $name;
+    }
+
+    private function existingWritablePartName(string $name): string
+    {
+        $name = $this->existingPartName($name);
+        if (PartName::isRelationshipsPart($name)) {
+            throw new OpenXmlException('Relationship parts are managed through the relationship API.');
         }
 
         return $name;

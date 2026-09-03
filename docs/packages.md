@@ -213,6 +213,11 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `save(): void` | Atomically replace the opened source. |
 | `saveAs(string $filename): void` | Atomically write to another path. |
 
+Relationship parts are readable through `getPart()` and the raw read APIs, but
+their contents cannot be replaced through `PartInterface` or the raw write APIs.
+Use `getRelationships()`, `addRelationship()`, and `removeRelationship()` so the
+in-memory relationship collection and its XML representation remain synchronized.
+
 `inspectSignatures()` is structural inspection, not cryptographic verification.
 See [Digital signatures](signatures.md) for its trust boundary and examples.
 
