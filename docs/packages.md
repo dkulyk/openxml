@@ -174,8 +174,9 @@ comparing the file identity (device and inode), size, and second-resolution
 modification and change timestamps recorded when the source was opened. This
 is a fast guard rather than proof of byte identity: a replacement through
 rename changes the inode and an in-place rewrite changes the change timestamp,
-but an in-place rewrite of the same inode that keeps the size within the same
-second is not noticed. The package never hashes the source or its output.
+but an in-place rewrite of the same inode that preserves the file size and
+completes within the same one-second timestamp resolution is not noticed. The
+package never hashes the source or its output.
 Use `discardChanges()` to restore the opened source state. For a focused edit,
 use a callback that saves only after successful completion:
 

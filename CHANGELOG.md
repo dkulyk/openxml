@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added
+
+- `setDefaultContentType()` declares a `Default` content type by extension, so
+  consumers can cover media parts with one declaration instead of an `Override`
+  per part.
+
 ### Changed
 
 - **Breaking:** the source package is no longer hashed with SHA-256 when it is
@@ -13,13 +19,6 @@ All notable changes to this project will be documented in this file. The format 
   guarded every read. Lazily opening a 16 MiB package dropped from about
   44 ms to under 1 ms, and its copy-through save from about 66 ms to about
   23 ms.
-
-### Added
-
-- `setDefaultContentType()` declares a `Default` content type by extension, so
-  consumers can cover media parts with one declaration instead of an `Override`
-  per part.
-
 - New packages declare `Default Extension="xml"` as `application/xml` alongside
   `rels`, and adding or moving a part whose content type already matches the
   default for its extension no longer writes an `Override`.
