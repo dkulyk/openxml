@@ -975,7 +975,6 @@ final class OpenXmlPackage implements PackageInterface
         }
     }
 
-    /** Stored name of an existing relationship part, otherwise the name derived from its source. */
     /** Write an override only when no default already yields the same type. */
     private function registerContentType(string $name, string $contentType): void
     {
@@ -985,6 +984,7 @@ final class OpenXmlPackage implements PackageInterface
         }
     }
 
+    /** Stored name of an existing relationship part, otherwise the name derived from its source. */
     private function relationshipsPartName(?string $sourcePartName): string
     {
         $derived = PartName::relationshipsName($sourcePartName);
