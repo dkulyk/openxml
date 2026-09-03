@@ -886,17 +886,18 @@ final class OpenXmlPackage implements PackageInterface
             }
         };
 
+        $writtenFingerprint = null;
         AtomicFileWriter::replace(
             $filename,
-            function (string $temporaryFilename): void {
+            function (string $temporaryFilename) use (&$writtenFingerprint): void {
                 $this->container->saveAs($temporaryFilename);
-                $this->verifyWrittenPackage($temporaryFilename);
+                $writtenFingerprint = $this->verifyWrittenPackage($temporaryFilename);
             },
             $beforeReplace,
         );
 
         $this->sourceFilename = self::resolveExistingFilename($filename);
-        $sourceState = SourceFileState::capture($this->sourceFilename);
+        $sourceState = SourceFileState::capture($this->sourceFilename, $writtenFingerprint);
         $this->sourceFingerprint = $sourceState->fingerprint();
         $this->container = ZipContainer::open($this->sourceFilename, $this->limits, $sourceState);
         $this->rebuildPartNameIndex();
@@ -904,9 +905,10 @@ final class OpenXmlPackage implements PackageInterface
         $this->changed = false;
     }
 
-    private function verifyWrittenPackage(string $filename): void
+    private function verifyWrittenPackage(string $filename): string
     {
-        $container = ZipContainer::open($filename, $this->limits);
+        $sourceState = SourceFileState::capture($filename);
+        $container = ZipContainer::open($filename, $this->limits, $sourceState);
         if (!$container->has('[Content_Types].xml')) {
             throw new OpenXmlException('Written package has no [Content_Types].xml.');
         }
@@ -915,6 +917,8 @@ final class OpenXmlPackage implements PackageInterface
             $container->read('[Content_Types].xml'),
             $this->limits->maximumXmlBytes,
         );
+
+        return $sourceState->fingerprint();
     }
 
     private function assertPartNameAvailable(

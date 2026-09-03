@@ -17,8 +17,12 @@ final class SourceFileState
         private array $metadata,
     ) {}
 
-    public static function capture(string $filename): self
+    public static function capture(string $filename, ?string $knownFingerprint = null): self
     {
+        if ($knownFingerprint !== null) {
+            return new self($filename, $knownFingerprint, self::readMetadata($filename));
+        }
+
         $metadataBeforeHashing = self::readMetadata($filename);
         $fingerprint = @hash_file('sha256', $filename);
         if ($fingerprint === false) {
