@@ -27,8 +27,9 @@ details and is not a compatibility surface. The container retains entry metadata
 when opening a package and loads content only when requested.
 
 Streamed writes are staged in temporary storage. Reads of unchanged entries use
-native lazy ZIP streams whose contexts retain the archive and package until the
-caller closes them. Unchanged entries also use ZIP copy-through during a save,
+native lazy ZIP streams. A container opens its source archive once, shares it
+between active entry streams, and is retained by each stream context until the
+caller closes it. Unchanged entries also use ZIP copy-through during a save,
 preserving their compressed representation. Complete output is validated in a
 same-directory temporary file before atomic replacement.
 

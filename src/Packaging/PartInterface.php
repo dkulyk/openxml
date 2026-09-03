@@ -14,7 +14,7 @@ interface PartInterface
 
     public function setContents(string $contents): void;
 
-    /** @return resource A readable stream that keeps its package alive until closed. */
+    /** @return resource A readable stream that keeps its backing storage alive until closed. */
     public function openStream();
 
     /** Return a PHP-readable ZIP URI or a package-owned local path valid for the package lifetime. */

@@ -6,8 +6,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
-- Lazy streams for unchanged ZIP-backed parts, with stream-context ownership
-  keeping the archive and package alive until the caller closes the last stream.
+- Lazy streams for unchanged ZIP-backed parts, sharing one source archive whose
+  container remains alive until the caller closes the last stream.
 - Deferred part paths using native `zip://` URIs for unchanged entries and
   package-owned local materialization for staged content and path-only consumers.
 - Local path-based APIs for adding and replacing large parts without first

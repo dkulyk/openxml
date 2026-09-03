@@ -17,7 +17,6 @@ use DK\OpenXml\Internal\Container\ZipContainer;
 use DK\OpenXml\Internal\MaterializationPool;
 use DK\OpenXml\Internal\PackageRepairer;
 use DK\OpenXml\Internal\SignatureInspector;
-use DK\OpenXml\Internal\StreamOwner;
 use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PackageInterface;
 use DK\OpenXml\Packaging\Part;
@@ -47,8 +46,6 @@ final class OpenXmlPackage implements PackageInterface
     private MaterializationPool $materializations;
 
     private int $contentRevision = 0;
-
-    private int $openPartStreams = 0;
 
     private function __construct(
         private ContainerInterface $container,
@@ -249,18 +246,7 @@ final class OpenXmlPackage implements PackageInterface
             throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
         }
 
-        $stream = $this->container->openStream(PartName::entry($name));
-        ++$this->openPartStreams;
-        $owner = new StreamOwner(function (): void {
-            --$this->openPartStreams;
-        });
-        if (!stream_context_set_option($stream, 'dk-openxml', 'package-owner', $owner)) {
-            fclose($stream);
-
-            throw new OpenXmlException(sprintf('Unable to bind part stream "%s" to its package.', $name));
-        }
-
-        return $stream;
+        return $this->container->openStream(PartName::entry($name));
     }
 
     public function getPartReadablePath(string $name): string
@@ -868,10 +854,6 @@ final class OpenXmlPackage implements PackageInterface
 
     private function persist(string $filename, ?string $expectedFingerprint = null): void
     {
-        if ($expectedFingerprint !== null && $this->openPartStreams > 0) {
-            throw new OpenXmlException('Close all open part streams before replacing the source package.');
-        }
-
         $issues = $this->validate();
         if ($issues !== []) {
             throw new PackageValidationException($issues);
@@ -889,6 +871,8 @@ final class OpenXmlPackage implements PackageInterface
                         $filename,
                     ));
                 }
+
+                $this->container->prepareForSourceReplacement();
             };
 
         AtomicFileWriter::replace(

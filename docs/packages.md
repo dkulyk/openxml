@@ -88,15 +88,23 @@ $part->setContentsFromStream($replacement);
 
 The caller owns streams returned by `openStream()` and must close them. Unchanged
 parts in an opened package are read lazily from the source ZIP; staged parts use
-an independent snapshot. The stream keeps the package and its backing storage
-alive until `fclose()` or resource destruction, so it remains usable if the
-caller's package variable is released.
+an independent snapshot. A lazy stream keeps its backing ZIP container alive
+until `fclose()` or resource destruction, so it remains usable if the caller's
+package variable is released. Multiple simultaneous streams from the same
+package share one open ZIP archive.
 
 Streams guarantee sequential reading but are not guaranteed to be seekable;
 seekability depends on the ZIP entry and runtime. Use `getLocalPath()` when a
 consumer requires random access. Use `getContents()` and `setContents()` for
 small parts. Close every caller-owned part stream before `save()` replaces the
 opened source package; `saveAs()` to a different file remains available.
+
+The package keeps its source ZIP open so its central directory is parsed only
+once. Before an atomic `save()`, the library closes that archive after confirming
+that no part streams are still using it, then reopens the replaced package. On
+Windows, an open source archive held by another package instance, `zip://` user,
+or process may prevent replacement. If any reader must keep using the source
+while writing, save under a different name.
 
 ## Paths for deferred consumers
 
@@ -209,7 +217,7 @@ relationship content types, and unsupported digital-signature preservation.
 | `getContentType(): string` | Return the registered MIME content type. |
 | `getContents(): string` | Materialize and return the complete part. |
 | `setContents(string $contents): void` | Stage complete string contents. |
-| `openStream(): resource` | Open a readable stream that retains the package until the caller closes it. |
+| `openStream(): resource` | Open a readable stream that retains its backing ZIP container until the caller closes it. |
 | `getReadablePath(): string` | Return a `zip://` URI when possible, otherwise a package-owned local path. |
 | `getLocalPath(): string` | Return a package-owned local filesystem path. |
 | `setContentsFromStream(resource $stream): void` | Stage data from the current cursor to EOF. |

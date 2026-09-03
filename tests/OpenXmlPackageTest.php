@@ -250,7 +250,7 @@ final class OpenXmlPackageTest extends TestCase
         }
     }
 
-    public function testPartStreamsKeepThePackageAliveUntilTheLastStreamCloses(): void
+    public function testPartStreamsKeepTheirSharedContainerAlive(): void
     {
         $package = OpenXmlPackage::create();
         $package->addPart('/media/image.bin', 'application/octet-stream', 'image bytes');
@@ -263,14 +263,13 @@ final class OpenXmlPackageTest extends TestCase
         $secondStream = $part->openStream();
 
         unset($part, $package);
-        self::assertFileExists($materializedPath);
+        self::assertFileDoesNotExist($materializedPath);
         self::assertSame('image bytes', stream_get_contents($firstStream));
 
         fclose($firstStream);
-        self::assertFileExists($materializedPath);
+        self::assertSame('image bytes', stream_get_contents($secondStream));
 
         fclose($secondStream);
-        self::assertFileDoesNotExist($materializedPath);
     }
 
     public function testSourceCannotBeReplacedWhileAPartStreamIsOpen(): void
@@ -300,6 +299,33 @@ final class OpenXmlPackageTest extends TestCase
             '<updated/>',
             OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents(),
         );
+    }
+
+    public function testPackageCanBeSavedElsewhereWhileASourceStreamIsOpen(): void
+    {
+        $destination = $this->filename . '-copy.docx';
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<original/>');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $stream = $package->getPart('/document.xml')->openStream();
+        $package->getPart('/document.xml')->setContents('<updated/>');
+
+        try {
+            $package->saveAs($destination);
+
+            self::assertSame('<original/>', stream_get_contents($stream));
+            self::assertSame(
+                '<updated/>',
+                OpenXmlPackage::open($destination)->getPart('/document.xml')->getContents(),
+            );
+        } finally {
+            fclose($stream);
+            if (is_file($destination)) {
+                unlink($destination);
+            }
+        }
     }
 
     public function testPartContentsCanBeCopiedFromLocalPaths(): void

@@ -7,6 +7,7 @@ namespace DK\OpenXml\Internal\Container;
 use DK\OpenXml\Exception\ConcurrentModificationException;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageLimitException;
+use DK\OpenXml\Internal\StreamOwner;
 use DK\OpenXml\Security\PackageLimits;
 
 /** @internal */
@@ -24,6 +25,10 @@ final class ZipContainer implements ContainerInterface
     /** @var array<string, string> Destination entry names mapped to their source ZIP entry. */
     private array $moved = [];
 
+    private ?\ZipArchive $sourceArchive = null;
+
+    private int $openSourceStreams = 0;
+
     public function __construct(
         private PackageLimits $limits = new PackageLimits(),
         private ?string $sourceFilename = null,
@@ -32,6 +37,8 @@ final class ZipContainer implements ContainerInterface
 
     public function __destruct()
     {
+        $this->closeSourceArchive();
+
         foreach ($this->staged as $contents) {
             if (is_resource($contents)) {
                 fclose($contents);
@@ -84,10 +91,13 @@ final class ZipContainer implements ContainerInterface
             }
 
             $container->sourceFingerprint = self::fingerprint($filename);
+            $container->sourceArchive = $archive;
 
             return $container;
-        } finally {
+        } catch (\Throwable $exception) {
             $archive->close();
+
+            throw $exception;
         }
     }
 
@@ -126,24 +136,21 @@ final class ZipContainer implements ContainerInterface
         }
         $this->assertSourceUnchanged();
 
-        $archive = new \ZipArchive();
-        if ($archive->open($sourceFilename) !== true) {
-            throw new OpenXmlException(sprintf('Unable to reopen package "%s".', $sourceFilename));
-        }
-
+        $archive = $this->sourceArchive();
         $sourceEntryName = $this->moved[$name] ?? $name;
         $stream = $archive->getStream($sourceEntryName);
         if ($stream === false) {
-            $archive->close();
-
             throw new OpenXmlException(sprintf('Unable to open ZIP entry "%s".', $name));
         }
 
-        $owner = new ZipStreamOwner($archive);
-        if (!stream_context_set_option($stream, 'dk-openxml', 'zip-owner', $owner)) {
+        ++$this->openSourceStreams;
+        $owner = new StreamOwner(function (): void {
+            --$this->openSourceStreams;
+        });
+        if (!stream_context_set_option($stream, 'dk-openxml', 'container-owner', $owner)) {
             fclose($stream);
 
-            throw new OpenXmlException(sprintf('Unable to bind ZIP entry stream "%s" to its archive.', $name));
+            throw new OpenXmlException(sprintf('Unable to bind ZIP entry stream "%s" to its container.', $name));
         }
 
         try {
@@ -155,6 +162,15 @@ final class ZipContainer implements ContainerInterface
         }
 
         return $stream;
+    }
+
+    public function prepareForSourceReplacement(): void
+    {
+        if ($this->openSourceStreams > 0) {
+            throw new OpenXmlException('Close all open part streams before replacing the source package.');
+        }
+
+        $this->closeSourceArchive();
     }
 
     public function getReadablePath(string $name): ?string
@@ -334,6 +350,34 @@ final class ZipContainer implements ContainerInterface
         if (!$archive->close()) {
             throw new OpenXmlException(sprintf('Unable to finalize package "%s".', $filename));
         }
+    }
+
+    private function sourceArchive(): \ZipArchive
+    {
+        if ($this->sourceArchive !== null) {
+            return $this->sourceArchive;
+        }
+        if ($this->sourceFilename === null) {
+            throw new OpenXmlException('Package has no source ZIP archive.');
+        }
+
+        $archive = new \ZipArchive();
+        if ($archive->open($this->sourceFilename) !== true) {
+            throw new OpenXmlException(sprintf('Unable to reopen package "%s".', $this->sourceFilename));
+        }
+
+        return $this->sourceArchive = $archive;
+    }
+
+    private function closeSourceArchive(): void
+    {
+        if ($this->sourceArchive === null) {
+            return;
+        }
+
+        $archive = $this->sourceArchive;
+        $this->sourceArchive = null;
+        $archive->close();
     }
 
     private function currentSize(): int
