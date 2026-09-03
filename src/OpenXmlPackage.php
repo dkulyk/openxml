@@ -67,12 +67,11 @@ final class OpenXmlPackage implements PackageInterface
         $limits ??= new PackageLimits();
         $contentTypes = new ContentTypes();
         $contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
+        // Staged first so it becomes the first ZIP entry, as OPC expects for streaming readers.
+        $container = new ZipContainer($limits);
+        $container->write('[Content_Types].xml', $contentTypes->toXml());
 
-        return new self(
-            new ZipContainer($limits),
-            $contentTypes,
-            limits: $limits,
-        );
+        return new self($container, $contentTypes, limits: $limits);
     }
 
     public static function open(string $filename, ?PackageLimits $limits = null): self

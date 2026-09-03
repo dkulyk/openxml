@@ -443,6 +443,24 @@ final class OpenXmlPackageTest extends TestCase
         }
     }
 
+    public function testContentTypesIsTheFirstEntryOfANewPackage(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'document.xml');
+        $package->saveAs($this->filename);
+        unset($package);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename));
+
+        try {
+            self::assertSame('[Content_Types].xml', $archive->getNameIndex(0));
+        } finally {
+            $archive->close();
+        }
+    }
+
     public function testPartContentsCanBeCopiedFromLocalPaths(): void
     {
         $source = tempnam(sys_get_temp_dir(), 'openxml-source-');
@@ -480,13 +498,13 @@ final class OpenXmlPackageTest extends TestCase
     public function testFailedStreamWriteLeavesExistingPartUntouched(): void
     {
         $package = OpenXmlPackage::create(new PackageLimits(
-            maximumPartBytes: 8,
-            maximumPackageBytes: 64,
+            maximumPartBytes: 512,
+            maximumPackageBytes: 1024,
         ));
         $part = $package->addPart('/media.bin', 'application/octet-stream', 'original');
         $source = fopen('php://temp', 'w+b');
         self::assertIsResource($source);
-        fwrite($source, 'too many bytes');
+        fwrite($source, str_repeat('x', 513));
         rewind($source);
 
         try {
