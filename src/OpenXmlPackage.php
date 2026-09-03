@@ -926,7 +926,7 @@ final class OpenXmlPackage implements PackageInterface
         // Entries were validated when staged; only the archive structure and content types are read back.
         $archive = new \ZipArchive();
         if ($archive->open($filename, \ZipArchive::RDONLY) !== true) {
-            throw new OpenXmlException('Written package cannot be opened.');
+            throw new OpenXmlException(sprintf('Written package "%s" cannot be opened.', $filename));
         }
 
         try {
@@ -935,7 +935,7 @@ final class OpenXmlPackage implements PackageInterface
             $archive->close();
         }
         if ($contentTypesXml === false) {
-            throw new OpenXmlException('Written package has no [Content_Types].xml.');
+            throw new OpenXmlException(sprintf('Written package "%s" has no [Content_Types].xml.', $filename));
         }
         ContentTypes::fromXml($contentTypesXml, $this->limits->maximumXmlBytes);
 
