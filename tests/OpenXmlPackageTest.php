@@ -1131,6 +1131,30 @@ final class OpenXmlPackageTest extends TestCase
         $secondEditor->save();
     }
 
+    public function testSavedPackageRejectsOutputChangedBeforeItsFirstRead(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->saveAs($this->filename);
+        file_put_contents($this->filename, 'changed outside the package');
+
+        $this->expectException(ConcurrentModificationException::class);
+        $package->getPart('/document.xml')->getContents();
+    }
+
+    public function testSavedPackageReadsItsOutputBack(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->saveAs($this->filename);
+
+        self::assertSame('<document/>', $package->getPart('/document.xml')->getContents());
+        self::assertFalse($package->hasChanges());
+        $package->getPart('/document.xml')->setContents('<changed/>');
+        $package->save();
+        self::assertSame('<changed/>', OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents());
+    }
+
     public function testLazyPartReadRejectsAChangedSourcePackage(): void
     {
         $this->createSavedPackage('<original/>');

@@ -49,8 +49,11 @@ final class OpenXmlPackage implements PackageInterface
 
     private int $contentRevision = 0;
 
+    /** Source state of a saved package whose container is reopened on first access. */
+    private ?SourceFileState $pendingSource = null;
+
     private function __construct(
-        private ContainerInterface $container,
+        private ?ContainerInterface $container,
         private ContentTypes $contentTypes,
         private ?string $sourceFilename = null,
         private ?string $sourceFingerprint = null,
@@ -166,7 +169,7 @@ final class OpenXmlPackage implements PackageInterface
 
     public function getParts(): \Traversable
     {
-        foreach ($this->container->entries() as $entryName) {
+        foreach ($this->container()->entries() as $entryName) {
             if ($entryName === '[Content_Types].xml') {
                 continue;
             }
@@ -191,7 +194,7 @@ final class OpenXmlPackage implements PackageInterface
         }
         $this->assertPartNameAvailable($name, true);
 
-        $this->container->write(PartName::entry($name), $contents);
+        $this->container()->write(PartName::entry($name), $contents);
         $this->registerContentType($name, $contentType);
         $this->partNames->add($name);
         ++$this->contentRevision;
@@ -208,7 +211,7 @@ final class OpenXmlPackage implements PackageInterface
         }
         $this->assertPartNameAvailable($name, true);
 
-        $this->container->writeStream(PartName::entry($name), $stream);
+        $this->container()->writeStream(PartName::entry($name), $stream);
         $this->registerContentType($name, $contentType);
         $this->partNames->add($name);
         ++$this->contentRevision;
@@ -236,7 +239,7 @@ final class OpenXmlPackage implements PackageInterface
             throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
         }
 
-        return $this->container->read(PartName::entry($name));
+        return $this->container()->read(PartName::entry($name));
     }
 
     /** @return resource */
@@ -248,14 +251,14 @@ final class OpenXmlPackage implements PackageInterface
             throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
         }
 
-        return $this->container->openStream(PartName::entry($name));
+        return $this->container()->openStream(PartName::entry($name));
     }
 
     public function getPartReadablePath(string $name): string
     {
         $name = $this->existingPartName($name);
 
-        return $this->container->getReadablePath(PartName::entry($name))
+        return $this->container()->getReadablePath(PartName::entry($name))
             ?? $this->getPartLocalPath($name);
     }
 
@@ -267,7 +270,7 @@ final class OpenXmlPackage implements PackageInterface
         return $this->materializations->materialize(
             $key,
             PartName::entry($name),
-            fn() => $this->container->openStream(PartName::entry($name)),
+            fn() => $this->container()->openStream(PartName::entry($name)),
         );
     }
 
@@ -275,7 +278,7 @@ final class OpenXmlPackage implements PackageInterface
     {
         $name = $this->existingWritablePartName($name);
 
-        $this->container->write(PartName::entry($name), $contents);
+        $this->container()->write(PartName::entry($name), $contents);
         ++$this->contentRevision;
         $this->changed = true;
     }
@@ -285,7 +288,7 @@ final class OpenXmlPackage implements PackageInterface
     {
         $name = $this->existingWritablePartName($name);
 
-        $this->container->writeStream(PartName::entry($name), $stream);
+        $this->container()->writeStream(PartName::entry($name), $stream);
         ++$this->contentRevision;
         $this->changed = true;
     }
@@ -371,8 +374,8 @@ final class OpenXmlPackage implements PackageInterface
     {
         $relationshipPartName = $this->relationshipsPartName($name);
 
-        $this->container->remove(PartName::entry($name));
-        $this->container->remove(PartName::entry($relationshipPartName));
+        $this->container()->remove(PartName::entry($name));
+        $this->container()->remove(PartName::entry($relationshipPartName));
         $this->contentTypes->removeOverride($name);
         $this->partNames->remove($name);
         $this->partNames->remove($relationshipPartName);
@@ -405,8 +408,8 @@ final class OpenXmlPackage implements PackageInterface
         $sourceRelationshipPart = $this->relationshipsPartName($source);
         $destinationRelationshipPart = $this->relationshipsPartName($destination);
         if (
-            $this->container->has(PartName::entry($sourceRelationshipPart))
-            && $this->container->has(PartName::entry($destinationRelationshipPart))
+            $this->container()->has(PartName::entry($sourceRelationshipPart))
+            && $this->container()->has(PartName::entry($destinationRelationshipPart))
         ) {
             throw new OpenXmlException(sprintf(
                 'Destination relationship part already exists: %s',
@@ -414,9 +417,9 @@ final class OpenXmlPackage implements PackageInterface
             ));
         }
 
-        $this->container->move(PartName::entry($source), PartName::entry($destination));
-        if ($this->container->has(PartName::entry($sourceRelationshipPart))) {
-            $this->container->move(
+        $this->container()->move(PartName::entry($source), PartName::entry($destination));
+        if ($this->container()->has(PartName::entry($sourceRelationshipPart))) {
+            $this->container()->move(
                 PartName::entry($sourceRelationshipPart),
                 PartName::entry($destinationRelationshipPart),
             );
@@ -475,9 +478,9 @@ final class OpenXmlPackage implements PackageInterface
             $package->get()?->writeRelationships($relationships, $sourcePartName);
         };
 
-        $relationships = $this->container->has($relationshipEntryName)
+        $relationships = $this->container()->has($relationshipEntryName)
             ? Relationships::fromXml(
-                $this->container->read($relationshipEntryName),
+                $this->container()->read($relationshipEntryName),
                 $this,
                 $sourcePartName,
                 $onChange,
@@ -511,7 +514,7 @@ final class OpenXmlPackage implements PackageInterface
     public function inspectSignatures(): SignatureInspection
     {
         return (new SignatureInspector(
-            $this->container,
+            $this->container(),
             $this->contentTypes,
             $this->limits->maximumXmlBytes,
         ))->inspect();
@@ -692,7 +695,7 @@ final class OpenXmlPackage implements PackageInterface
     private function packageRepairer(): PackageRepairer
     {
         return new PackageRepairer(
-            $this->container,
+            $this->container(),
             $this->contentTypes,
             fn(?string $sourcePartName): Relationships => $this->getRelationships($sourcePartName),
             function (): void {
@@ -714,6 +717,7 @@ final class OpenXmlPackage implements PackageInterface
             : self::open($this->sourceFilename, $this->limits);
 
         $this->container = $freshPackage->container;
+        $this->pendingSource = null;
         $this->contentTypes = $freshPackage->contentTypes;
         $this->sourceFilename = $freshPackage->sourceFilename;
         $this->sourceFingerprint = $freshPackage->sourceFingerprint;
@@ -758,7 +762,7 @@ final class OpenXmlPackage implements PackageInterface
     {
         $partNames = [];
 
-        foreach ($this->container->entries() as $entryName) {
+        foreach ($this->container()->entries() as $entryName) {
             if ($entryName === '[Content_Types].xml') {
                 continue;
             }
@@ -812,7 +816,7 @@ final class OpenXmlPackage implements PackageInterface
         $relationshipEntryName = PartName::entry($relationshipPartName);
 
         if (count($relationships) === 0) {
-            $this->container->remove($relationshipEntryName);
+            $this->container()->remove($relationshipEntryName);
             $this->partNames->remove($relationshipPartName);
             $this->changed = true;
 
@@ -821,7 +825,7 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->contentTypes->setDefault('rels', Relationships::CONTENT_TYPE);
         // Serialized once on read or save instead of after every change.
-        $this->container->writeLazy($relationshipEntryName, static fn(): string => $relationships->toXml());
+        $this->container()->writeLazy($relationshipEntryName, static fn(): string => $relationships->toXml());
         $this->partNames->add($relationshipPartName);
         $this->changed = true;
     }
@@ -877,7 +881,7 @@ final class OpenXmlPackage implements PackageInterface
             throw new PackageValidationException($issues);
         }
 
-        $this->container->write('[Content_Types].xml', $this->contentTypes->toXml());
+        $this->container()->write('[Content_Types].xml', $this->contentTypes->toXml());
 
         $beforeReplace = function () use ($filename, $expectedFingerprint): void {
             if ($expectedFingerprint !== null) {
@@ -900,7 +904,7 @@ final class OpenXmlPackage implements PackageInterface
         AtomicFileWriter::replace(
             $filename,
             function (string $temporaryFilename) use (&$writtenFingerprint): void {
-                $this->container->saveAs($temporaryFilename);
+                $this->container()->saveAs($temporaryFilename);
                 $writtenFingerprint = $this->verifyWrittenPackage($temporaryFilename);
             },
             $beforeReplace,
@@ -909,8 +913,9 @@ final class OpenXmlPackage implements PackageInterface
         $this->sourceFilename = self::resolveExistingFilename($filename);
         $sourceState = SourceFileState::capture($this->sourceFilename, $writtenFingerprint);
         $this->sourceFingerprint = $sourceState->fingerprint();
-        $this->container = ZipContainer::open($this->sourceFilename, $this->limits, $sourceState);
-        $this->rebuildPartNameIndex();
+        // Reopened on first access, so a package that is saved and released never reads its output back.
+        $this->container = null;
+        $this->pendingSource = $sourceState;
         ++$this->contentRevision;
         $this->changed = false;
     }
@@ -918,17 +923,35 @@ final class OpenXmlPackage implements PackageInterface
     private function verifyWrittenPackage(string $filename): string
     {
         $sourceState = SourceFileState::capture($filename);
-        $container = ZipContainer::open($filename, $this->limits, $sourceState);
-        if (!$container->has('[Content_Types].xml')) {
-            throw new OpenXmlException('Written package has no [Content_Types].xml.');
+        // Entries were validated when staged; only the archive structure and content types are read back.
+        $archive = new \ZipArchive();
+        if ($archive->open($filename, \ZipArchive::RDONLY) !== true) {
+            throw new OpenXmlException('Written package cannot be opened.');
         }
 
-        ContentTypes::fromXml(
-            $container->read('[Content_Types].xml'),
-            $this->limits->maximumXmlBytes,
-        );
+        try {
+            $contentTypesXml = $archive->getFromName('[Content_Types].xml');
+        } finally {
+            $archive->close();
+        }
+        if ($contentTypesXml === false) {
+            throw new OpenXmlException('Written package has no [Content_Types].xml.');
+        }
+        ContentTypes::fromXml($contentTypesXml, $this->limits->maximumXmlBytes);
 
         return $sourceState->fingerprint();
+    }
+
+    private function container(): ContainerInterface
+    {
+        if ($this->pendingSource !== null) {
+            $this->pendingSource->assertUnchanged();
+            $this->container = ZipContainer::open((string) $this->sourceFilename, $this->limits, $this->pendingSource);
+            $this->pendingSource = null;
+            $this->rebuildPartNameIndex();
+        }
+
+        return $this->container ?? throw new OpenXmlException('The package container is unavailable.');
     }
 
     private function assertPartNameAvailable(
@@ -1022,7 +1045,7 @@ final class OpenXmlPackage implements PackageInterface
     {
         $this->partNames = new PartNameIndex();
         $this->relationships = [];
-        foreach ($this->container->entries() as $entryName) {
+        foreach ($this->container()->entries() as $entryName) {
             if ($entryName === '[Content_Types].xml') {
                 continue;
             }

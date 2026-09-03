@@ -104,7 +104,8 @@ opened source package; `saveAs()` to a different file remains available.
 
 The package keeps its source ZIP open so its central directory is parsed only
 once. Before an atomic `save()`, the library closes that archive after confirming
-that no part streams are still using it, then reopens the replaced package. On
+that no part streams are still using it, then reopens the replaced package on
+its next part access. On
 Windows, the library also coordinates idle source handles held by its other
 package instances in the same process. An active part stream, `zip://` user, or
 external process may still prevent replacement. If any reader must keep using
