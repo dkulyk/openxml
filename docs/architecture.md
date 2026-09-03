@@ -10,9 +10,10 @@ DK\OpenXml\OpenXmlPackage
 ├── Packaging\Relationships / RelationshipInterface
 ├── Packaging\ContentTypes
 ├── Signature\SignatureInspection / PackageSignature
-└── Internal\Container\ContainerInterface
-    ├── Internal\Container\ZipContainer
-    └── Internal\MaterializationPool
+└── Internal
+    ├── Container\ContainerInterface / ZipContainer
+    ├── MaterializationPool
+    └── SourceFileState
 
 DK\OpenXml\Encryption\EncryptedOfficeFile
 ├── Internal\Encryption\AgileEncryption (compatible profiles read, modern profile write)
@@ -37,6 +38,10 @@ A weak internal registry coordinates containers for the same source path. Before
 replacement it closes idle archives held by this process and rejects the write if
 any container still has an active source stream. The registry does not extend a
 container's lifetime.
+
+`SourceFileState` captures one full fingerprint while a package is opened. Lazy
+reads compare inexpensive filesystem metadata, while an in-place save compares
+the complete fingerprint immediately before atomic replacement.
 
 Unchanged ZIP-backed parts can expose a native `zip://` URI to deferred
 path-based consumers. When an entry is staged or a local path is required, the

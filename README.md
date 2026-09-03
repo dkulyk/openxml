@@ -120,9 +120,10 @@ composer benchmark
 ```
 
 `composer check` runs Composer validation, syntax checks, PHP CS Fixer, PHPStan
-at level `max`, dependency auditing, and PHPUnit. CI covers PHP 8.1–8.5, lowest
-supported dependencies, and Windows. Scheduled workflows exercise LibreOffice
-interoperability and publish package benchmark results.
+at level `max`, and PHPUnit. CI additionally audits locked dependencies and
+covers PHP 8.1–8.5, lowest supported dependencies, and Windows. Scheduled
+workflows exercise LibreOffice interoperability and publish package benchmark
+results.
 
 ## License
 

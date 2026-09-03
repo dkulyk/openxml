@@ -54,8 +54,9 @@ EncryptedOfficeFile::decrypt(
 ```
 
 Agile encryption integrity is authenticated before output replacement. Wrong
-passwords, malformed metadata, and modified encrypted payloads fail with specific
-exceptions.
+passwords and malformed metadata fail with specific exceptions; modified Agile
+payloads also fail integrity verification. Standard Encryption is supported for
+legacy reads but does not provide Agile's authenticated integrity metadata.
 
 `EncryptionLimits` bounds password-hash iterations, the `EncryptionInfo` stream,
 and the declared decrypted package size. Unsigned 64-bit size fields that cannot
