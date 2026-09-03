@@ -80,6 +80,19 @@ final class SignatureInspectionTest extends TestCase
         self::assertStringContainsString('without a package digital-signature origin', $inspection->getIssues()[0]);
     }
 
+    public function testValidationReportsAnOriginRelationshipWithoutSignatureParts(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addRelationship(RelationshipType::DIGITAL_SIGNATURE_ORIGIN, '_xmlsignatures/origin.sigs');
+
+        $issues = $package->validate();
+
+        self::assertCount(3, $issues);
+        self::assertStringContainsString('signature preservation is not supported', $issues[0]);
+        self::assertStringContainsString('Digital signature: The digital-signature origin relationship targets a missing part', $issues[1]);
+        self::assertStringContainsString('Relationship "rId1" from the package targets missing part', $issues[2]);
+    }
+
     public function testExternalOriginRelationshipIsMalformed(): void
     {
         $package = OpenXmlPackage::create();
