@@ -450,15 +450,13 @@ final class OpenXmlPackageTest extends TestCase
         $package->addRelationship('urn:document', 'document.xml');
         $package->saveAs($this->filename);
         unset($package);
+        self::assertSame('[Content_Types].xml', $this->firstEntryName());
 
-        $archive = new \ZipArchive();
-        self::assertTrue($archive->open($this->filename));
-
-        try {
-            self::assertSame('[Content_Types].xml', $archive->getNameIndex(0));
-        } finally {
-            $archive->close();
-        }
+        $reopened = OpenXmlPackage::open($this->filename);
+        $reopened->addPart('/styles.xml', 'application/xml', '<styles/>');
+        $reopened->save();
+        unset($reopened);
+        self::assertSame('[Content_Types].xml', $this->firstEntryName());
     }
 
     public function testPartContentsCanBeCopiedFromLocalPaths(): void
@@ -1069,6 +1067,21 @@ final class OpenXmlPackageTest extends TestCase
 
         $this->expectException(OpenXmlException::class);
         $package->save();
+    }
+
+    private function firstEntryName(): string
+    {
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename));
+
+        try {
+            $name = $archive->getNameIndex(0);
+            self::assertNotFalse($name);
+
+            return $name;
+        } finally {
+            $archive->close();
+        }
     }
 
     private function createSavedPackage(string $contents): OpenXmlPackage
