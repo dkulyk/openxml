@@ -131,31 +131,30 @@ final class ZipContainer implements ContainerInterface
             throw new OpenXmlException(sprintf('Unable to reopen package "%s".', $sourceFilename));
         }
 
-        try {
-            $sourceEntryName = $this->moved[$name] ?? $name;
-            $source = $archive->getStream($sourceEntryName);
-            if ($source === false) {
-                throw new OpenXmlException(sprintf('Unable to open ZIP entry "%s".', $name));
-            }
-
-            try {
-                $stream = $this->copyResourceToIndependentStream($source, $name, false);
-
-                try {
-                    $this->assertSourceUnchanged();
-                } catch (\Throwable $exception) {
-                    fclose($stream);
-
-                    throw $exception;
-                }
-
-                return $stream;
-            } finally {
-                fclose($source);
-            }
-        } finally {
+        $sourceEntryName = $this->moved[$name] ?? $name;
+        $stream = $archive->getStream($sourceEntryName);
+        if ($stream === false) {
             $archive->close();
+
+            throw new OpenXmlException(sprintf('Unable to open ZIP entry "%s".', $name));
         }
+
+        $owner = new ZipStreamOwner($archive);
+        if (!stream_context_set_option($stream, 'dk-openxml', 'zip-owner', $owner)) {
+            fclose($stream);
+
+            throw new OpenXmlException(sprintf('Unable to bind ZIP entry stream "%s" to its archive.', $name));
+        }
+
+        try {
+            $this->assertSourceUnchanged();
+        } catch (\Throwable $exception) {
+            fclose($stream);
+
+            throw $exception;
+        }
+
+        return $stream;
     }
 
     public function getReadablePath(string $name): ?string

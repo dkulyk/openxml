@@ -233,6 +233,75 @@ final class OpenXmlPackageTest extends TestCase
         self::assertFileDoesNotExist($path);
     }
 
+    public function testUnchangedPartIsReadDirectlyFromTheZip(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/image.bin', 'application/octet-stream', str_repeat('image bytes', 1_000));
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $stream = $package->getPart('/media/image.bin')->openStream();
+
+        try {
+            self::assertSame('zip', stream_get_meta_data($stream)['stream_type']);
+            self::assertSame(str_repeat('image bytes', 1_000), stream_get_contents($stream));
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testPartStreamsKeepThePackageAliveUntilTheLastStreamCloses(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/image.bin', 'application/octet-stream', 'image bytes');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $part = $package->getPart('/media/image.bin');
+        $materializedPath = $part->getLocalPath();
+        $firstStream = $part->openStream();
+        $secondStream = $part->openStream();
+
+        unset($part, $package);
+        self::assertFileExists($materializedPath);
+        self::assertSame('image bytes', stream_get_contents($firstStream));
+
+        fclose($firstStream);
+        self::assertFileExists($materializedPath);
+
+        fclose($secondStream);
+        self::assertFileDoesNotExist($materializedPath);
+    }
+
+    public function testSourceCannotBeReplacedWhileAPartStreamIsOpen(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $stream = $package->getPart('/document.xml')->openStream();
+        $package->getPart('/document.xml')->setContents('<updated/>');
+
+        try {
+            $package->save();
+            self::fail('Saving should require caller-owned part streams to be closed.');
+        } catch (OpenXmlException $exception) {
+            self::assertSame(
+                'Close all open part streams before replacing the source package.',
+                $exception->getMessage(),
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $package->save();
+        self::assertSame(
+            '<updated/>',
+            OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents(),
+        );
+    }
+
     public function testPartContentsCanBeCopiedFromLocalPaths(): void
     {
         $source = tempnam(sys_get_temp_dir(), 'openxml-source-');

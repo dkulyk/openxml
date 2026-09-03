@@ -86,9 +86,17 @@ try {
 $part->setContentsFromStream($replacement);
 ```
 
-The caller owns streams returned by `openStream()` and must close them. Each is
-an independent temporary stream and remains usable if the package object is later
-released. Use `getContents()` and `setContents()` for small parts.
+The caller owns streams returned by `openStream()` and must close them. Unchanged
+parts in an opened package are read lazily from the source ZIP; staged parts use
+an independent snapshot. The stream keeps the package and its backing storage
+alive until `fclose()` or resource destruction, so it remains usable if the
+caller's package variable is released.
+
+Streams guarantee sequential reading but are not guaranteed to be seekable;
+seekability depends on the ZIP entry and runtime. Use `getLocalPath()` when a
+consumer requires random access. Use `getContents()` and `setContents()` for
+small parts. Close every caller-owned part stream before `save()` replaces the
+opened source package; `saveAs()` to a different file remains available.
 
 ## Paths for deferred consumers
 
@@ -201,7 +209,7 @@ relationship content types, and unsupported digital-signature preservation.
 | `getContentType(): string` | Return the registered MIME content type. |
 | `getContents(): string` | Materialize and return the complete part. |
 | `setContents(string $contents): void` | Stage complete string contents. |
-| `openStream(): resource` | Return an independent readable temporary stream owned by the caller. |
+| `openStream(): resource` | Open a readable stream that retains the package until the caller closes it. |
 | `getReadablePath(): string` | Return a `zip://` URI when possible, otherwise a package-owned local path. |
 | `getLocalPath(): string` | Return a package-owned local filesystem path. |
 | `setContentsFromStream(resource $stream): void` | Stage data from the current cursor to EOF. |

@@ -26,9 +26,11 @@ DK\OpenXml\Encryption\EncryptedOfficeFile
 details and is not a compatibility surface. The container retains entry metadata
 when opening a package and loads content only when requested.
 
-Streamed writes are staged in temporary storage. Unchanged entries use ZIP
-copy-through, preserving their compressed representation during a save. Complete
-output is validated in a same-directory temporary file before atomic replacement.
+Streamed writes are staged in temporary storage. Reads of unchanged entries use
+native lazy ZIP streams whose contexts retain the archive and package until the
+caller closes them. Unchanged entries also use ZIP copy-through during a save,
+preserving their compressed representation. Complete output is validated in a
+same-directory temporary file before atomic replacement.
 
 Unchanged ZIP-backed parts can expose a native `zip://` URI to deferred
 path-based consumers. When an entry is staged or a local path is required, the
