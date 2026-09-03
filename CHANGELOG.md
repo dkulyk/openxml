@@ -6,10 +6,22 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Added
 
+- Lazy streams for unchanged ZIP-backed parts, sharing one source archive whose
+  container remains alive until the caller closes the last stream, with weak
+  same-process coordination before atomic source replacement.
 - Deferred part paths using native `zip://` URIs for unchanged entries and
   package-owned local materialization for staged content and path-only consumers.
 - Local path-based APIs for adding and replacing large parts without first
   loading their contents into PHP strings.
+
+### Changed
+
+- `openStream()` now returns a lazy ZIP stream for unchanged parts; seekability
+  is no longer guaranteed and callers requiring random access must use
+  `getLocalPath()`.
+- Source archives remain open for the package lifetime and are shared by its
+  streams. Source replacement is rejected while a relevant stream is open;
+  this also makes file-handle lifetime observable on Windows.
 
 ## [0.5.0] - 2026-09-02
 

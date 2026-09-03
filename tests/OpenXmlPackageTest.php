@@ -198,6 +198,7 @@ final class OpenXmlPackageTest extends TestCase
             self::assertFileExists($path);
             self::assertSame('image bytes', file_get_contents($path));
         } finally {
+            unset($package);
             if (is_file($filename)) {
                 unlink($filename);
             }
@@ -231,6 +232,159 @@ final class OpenXmlPackageTest extends TestCase
         unset($part, $package);
 
         self::assertFileDoesNotExist($path);
+    }
+
+    public function testUnchangedPartIsReadDirectlyFromTheZip(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/image.bin', 'application/octet-stream', str_repeat('image bytes', 1_000));
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $stream = $package->getPart('/media/image.bin')->openStream();
+
+        try {
+            self::assertSame('zip', stream_get_meta_data($stream)['stream_type']);
+            self::assertSame(str_repeat('image bytes', 1_000), stream_get_contents($stream));
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testPartStreamsKeepTheirSharedContainerAlive(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/image.bin', 'application/octet-stream', 'image bytes');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $part = $package->getPart('/media/image.bin');
+        $materializedPath = $part->getLocalPath();
+        $firstStream = $part->openStream();
+        $secondStream = $part->openStream();
+
+        unset($part, $package);
+        self::assertFileDoesNotExist($materializedPath);
+        self::assertSame('image bytes', stream_get_contents($firstStream));
+
+        fclose($firstStream);
+        self::assertSame('image bytes', stream_get_contents($secondStream));
+
+        fclose($secondStream);
+    }
+
+    public function testSourceCannotBeReplacedWhileAPartStreamIsOpen(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $stream = $package->getPart('/document.xml')->openStream();
+        $package->getPart('/document.xml')->setContents('<updated/>');
+
+        try {
+            $package->save();
+            self::fail('Saving should require caller-owned part streams to be closed.');
+        } catch (OpenXmlException $exception) {
+            self::assertSame(
+                'Close all open part streams before replacing the source package.',
+                $exception->getMessage(),
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $package->save();
+        self::assertSame(
+            '<updated/>',
+            OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents(),
+        );
+    }
+
+    public function testSourceStreamFromAnotherPackageInstanceBlocksReplacement(): void
+    {
+        $editor = OpenXmlPackage::create();
+        $editor->addPart('/document.xml', 'application/xml', '<original/>');
+        $editor->saveAs($this->filename);
+
+        $editor = OpenXmlPackage::open($this->filename);
+        $reader = OpenXmlPackage::open($this->filename);
+        $stream = $reader->getPart('/document.xml')->openStream();
+        $editor->getPart('/document.xml')->setContents('<updated/>');
+
+        try {
+            $editor->save();
+            self::fail('A source stream from another package instance should block replacement.');
+        } catch (OpenXmlException $exception) {
+            self::assertSame(
+                'Close all open part streams before replacing the source package.',
+                $exception->getMessage(),
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $editor->save();
+        self::assertSame('<updated/>', OpenXmlPackage::open($this->filename)->getPart('/document.xml')->getContents());
+    }
+
+    public function testPackageCanBeSavedElsewhereWhileASourceStreamIsOpen(): void
+    {
+        $destination = $this->filename . '-copy.docx';
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<original/>');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $stream = $package->getPart('/document.xml')->openStream();
+        $package->getPart('/document.xml')->setContents('<updated/>');
+
+        try {
+            $package->saveAs($destination);
+
+            self::assertSame('<original/>', stream_get_contents($stream));
+            self::assertSame(
+                '<updated/>',
+                OpenXmlPackage::open($destination)->getPart('/document.xml')->getContents(),
+            );
+        } finally {
+            fclose($stream);
+            unset($package);
+            if (is_file($destination)) {
+                unlink($destination);
+            }
+        }
+    }
+
+    public function testSaveAsCanReplaceAFileOpenedByAnotherIdlePackage(): void
+    {
+        $destination = tempnam(sys_get_temp_dir(), 'openxml-destination-');
+        self::assertNotFalse($destination);
+
+        try {
+            $destinationPackage = OpenXmlPackage::create();
+            $destinationPackage->addPart('/document.xml', 'application/xml', '<old destination/>');
+            $destinationPackage->saveAs($destination);
+            $observer = OpenXmlPackage::open($destination);
+
+            $source = OpenXmlPackage::create();
+            $source->addPart('/document.xml', 'application/xml', '<new destination/>');
+            $source->saveAs($destination);
+
+            self::assertSame(
+                '<new destination/>',
+                OpenXmlPackage::open($destination)->getPart('/document.xml')->getContents(),
+            );
+
+            $this->expectException(ConcurrentModificationException::class);
+            $observer->getPart('/document.xml')->getContents();
+        } finally {
+            unset($destinationPackage, $observer, $source);
+            if (is_file($destination)) {
+                unlink($destination);
+            }
+        }
     }
 
     public function testPartContentsCanBeCopiedFromLocalPaths(): void
@@ -379,6 +533,18 @@ final class OpenXmlPackageTest extends TestCase
 
         $package->saveAs($this->filename);
         self::assertCount(2, OpenXmlPackage::open($this->filename)->getRelationships());
+    }
+
+    public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $relationships = $package->getRelationships();
+        $packageReference = \WeakReference::create($package);
+
+        unset($relationships, $package);
+
+        self::assertNull($packageReference->get());
     }
 
     public function testRemovingRelationshipsByResolvedTargetPersists(): void

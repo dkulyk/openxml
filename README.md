@@ -16,7 +16,7 @@ PresentationML documents.
 ## Features
 
 - Read, create, and atomically update OPC packages.
-- Stream large images and embedded files without keeping them in PHP strings.
+- Lazily stream large images and embedded files without keeping them in PHP strings.
 - Pass unchanged parts to path-based consumers through `zip://` URIs, with
   automatic package-owned local materialization when a native URI is unavailable.
 - Navigate and modify package-level and part-level relationships.

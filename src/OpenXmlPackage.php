@@ -13,6 +13,7 @@ use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Container\ContainerInterface;
+use DK\OpenXml\Internal\Container\SourceArchiveRegistry;
 use DK\OpenXml\Internal\Container\ZipContainer;
 use DK\OpenXml\Internal\MaterializationPool;
 use DK\OpenXml\Internal\PackageRepairer;
@@ -40,7 +41,7 @@ final class OpenXmlPackage implements PackageInterface
     /** @var array<string, string> Lowercase part name => stored part name. */
     private array $partNames = [];
 
-    /** @var array<string, Relationships> Source part name ('' for the package) => live relationship collection. */
+    /** @var array<string, \WeakReference<Relationships>> Source part name ('' for the package) => live collection. */
     private array $relationships = [];
 
     private MaterializationPool $materializations;
@@ -457,7 +458,12 @@ final class OpenXmlPackage implements PackageInterface
         // overwrite each other's changes when they persist.
         $cacheKey = $sourcePartName ?? '';
         if (isset($this->relationships[$cacheKey])) {
-            return $this->relationships[$cacheKey];
+            $relationships = $this->relationships[$cacheKey]->get();
+            if ($relationships !== null) {
+                return $relationships;
+            }
+
+            unset($this->relationships[$cacheKey]);
         }
 
         $relationshipEntryName = PartName::entry(PartName::relationshipsName($sourcePartName));
@@ -466,7 +472,7 @@ final class OpenXmlPackage implements PackageInterface
             $sourcePartName,
         );
 
-        return $this->relationships[$cacheKey] = $this->container->has($relationshipEntryName)
+        $relationships = $this->container->has($relationshipEntryName)
             ? Relationships::fromXml(
                 $this->container->read($relationshipEntryName),
                 $this,
@@ -475,6 +481,9 @@ final class OpenXmlPackage implements PackageInterface
                 $this->limits->maximumXmlBytes,
             )
             : new Relationships($this, $sourcePartName, $onChange);
+        $this->relationships[$cacheKey] = \WeakReference::create($relationships);
+
+        return $relationships;
     }
 
     public function addRelationship(
@@ -854,6 +863,11 @@ final class OpenXmlPackage implements PackageInterface
 
     private function persist(string $filename, ?string $expectedFingerprint = null): void
     {
+        $existingDestination = realpath($filename);
+        if ($existingDestination !== false) {
+            SourceArchiveRegistry::assertCanReplace($existingDestination);
+        }
+
         $issues = $this->validate();
         if ($issues !== []) {
             throw new PackageValidationException($issues);
@@ -861,9 +875,8 @@ final class OpenXmlPackage implements PackageInterface
 
         $this->container->write('[Content_Types].xml', $this->contentTypes->toXml());
 
-        $beforeReplace = $expectedFingerprint === null
-            ? null
-            : function () use ($filename, $expectedFingerprint): void {
+        $beforeReplace = function () use ($filename, $expectedFingerprint): void {
+            if ($expectedFingerprint !== null) {
                 $currentFingerprint = self::fingerprint($filename);
                 if (!hash_equals($expectedFingerprint, $currentFingerprint)) {
                     throw new ConcurrentModificationException(sprintf(
@@ -871,7 +884,13 @@ final class OpenXmlPackage implements PackageInterface
                         $filename,
                     ));
                 }
-            };
+            }
+
+            $existingDestination = realpath($filename);
+            if ($existingDestination !== false) {
+                SourceArchiveRegistry::prepareForReplacement($existingDestination);
+            }
+        };
 
         AtomicFileWriter::replace(
             $filename,

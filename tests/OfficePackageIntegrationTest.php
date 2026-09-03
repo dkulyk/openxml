@@ -47,6 +47,7 @@ final class OfficePackageIntegrationTest extends TestCase
             );
             self::assertCount(1 + count($additionalParts), iterator_to_array($reopened->getParts()));
         } finally {
+            unset($mainPart, $package, $reopened);
             if (is_file($filename)) {
                 unlink($filename);
             }
