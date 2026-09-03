@@ -724,6 +724,29 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame('source', $reopened->getPart('/destination.xml')->getContents());
     }
 
+    public function testPartNameIndexKeepsRemainingDescendantConflictsAfterRemoval(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/first/image.png', 'image/png', 'first');
+        $package->addPart('/media/second/image.png', 'image/png', 'second');
+
+        $package->removePart('/media/first/image.png');
+
+        $this->expectException(OpenXmlException::class);
+        $package->addPart('/media', 'application/octet-stream', 'conflict');
+    }
+
+    public function testMovingTheOnlyDescendantOntoItsFormerAncestorName(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/image.png', 'image/png', 'image');
+
+        $moved = $package->movePart('/media/image.png', '/media');
+
+        self::assertSame('/media', $moved->getName());
+        self::assertFalse($package->hasPart('/media/image.png'));
+    }
+
     public function testSavingToANewPathUsesUmaskPermissions(): void
     {
         if (DIRECTORY_SEPARATOR === '\\') {

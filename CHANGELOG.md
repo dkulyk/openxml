@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file. The format 
 
 - Successful saves reuse the verified temporary package fingerprint after
   atomic replacement instead of hashing the same output a second time.
+- Part-name availability checks use an indexed exact, ancestor, and descendant
+  lookup instead of scanning every package entry for each added part.
 - Relationship parts can be accessed consistently through both `getPart()`
   and the raw part-reading APIs.
 
