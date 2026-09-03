@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file. The format 
   lookup instead of scanning every package entry for each added part.
 - Relationship parts can be accessed consistently through both `getPart()`
   and the raw part-reading APIs.
+- Raw part-writing APIs reject relationship parts, which must be changed through
+  the relationship API to keep the in-memory collection and XML synchronized.
 
 ### Fixed
 

@@ -130,6 +130,48 @@ final class OpenXmlPackageTest extends TestCase
         self::assertFalse($package->hasPart(''));
     }
 
+    public function testRelationshipPartContentsCannotBeWrittenDirectly(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'document.xml');
+
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Relationship parts are managed through the relationship API.');
+
+        $package->getPart('/_rels/.rels')->setContents('<Relationships/>');
+    }
+
+    public function testRelationshipPartContentsCannotBeWrittenFromStream(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'document.xml');
+        $source = fopen('php://temp', 'w+b');
+        self::assertIsResource($source);
+
+        try {
+            $this->expectException(OpenXmlException::class);
+            $this->expectExceptionMessage('Relationship parts are managed through the relationship API.');
+
+            $package->getPart('/_rels/.rels')->setContentsFromStream($source);
+        } finally {
+            fclose($source);
+        }
+    }
+
+    public function testRelationshipPartContentsCannotBeWrittenFromPath(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'document.xml');
+
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Relationship parts are managed through the relationship API.');
+
+        $package->getPart('/_rels/.rels')->setContentsFromPath($this->filename);
+    }
+
     public function testPartCanBeAddedAndReadAsAStream(): void
     {
         $source = tmpfile();
