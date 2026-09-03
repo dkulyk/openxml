@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file. The format 
 - New packages declare `Default Extension="xml"` as `application/xml` alongside
   `rels`, and adding or moving a part whose content type already matches the
   default for its extension no longer writes an `Override`.
+- Package byte and entry limits are checked against running totals instead of
+  rescanning every entry on each write, so adding 4000 parts dropped from
+  about 360 ms to about 6 ms and part registration is linear again.
 - Part-name validation remembers names it already accepted, so building,
   validating, and saving a 193-part package dropped from about 10.6 ms to
   about 6.4 ms. The cache is bounded and is reset after 4096 names.

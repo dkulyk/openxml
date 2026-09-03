@@ -90,6 +90,35 @@ final class SecurityTest extends TestCase
         $package->addPart('/large.bin', 'application/octet-stream', str_repeat('x', 513));
     }
 
+    public function testPackageLimitsReleaseReplacedAndRemovedParts(): void
+    {
+        $package = OpenXmlPackage::create(new PackageLimits(maximumPackageBytes: 100_000, maximumEntries: 3));
+        $package->addPart('/first.bin', 'application/octet-stream', str_repeat('a', 60_000));
+
+        try {
+            $package->addPart('/second.bin', 'application/octet-stream', str_repeat('b', 60_000));
+            self::fail('The second part should exceed the package byte limit.');
+        } catch (PackageLimitException) {
+        }
+
+        $package->getPart('/first.bin')->setContents('small');
+        $package->addPart('/second.bin', 'application/octet-stream', str_repeat('b', 60_000));
+
+        try {
+            $package->addPart('/third.bin', 'application/octet-stream', 'c');
+            self::fail('The third part should exceed the entry limit.');
+        } catch (PackageLimitException) {
+        }
+
+        $package->removePart('/second.bin');
+        $package->addPart('/third.bin', 'application/octet-stream', str_repeat('c', 60_000));
+
+        self::assertSame(['/first.bin', '/third.bin'], array_map(
+            static fn($part) => $part->getName(),
+            iterator_to_array($package->getParts(), false),
+        ));
+    }
+
     public function testUnsafeZipEntryNameIsRejected(): void
     {
         $this->writeZip(['../outside.xml' => '<outside/>']);

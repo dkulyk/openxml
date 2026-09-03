@@ -81,7 +81,7 @@ try {
     unset($relationshipPackage);
 
     echo "Part registration:\n";
-    foreach ([50, 100, 200, 400, 800] as $partCount) {
+    foreach ([50, 100, 200, 400, 800, 2000, 4000] as $partCount) {
         $registrationPackage = OpenXmlPackage::create();
         $started = hrtime(true);
         for ($index = 0; $index < $partCount; ++$index) {

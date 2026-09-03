@@ -16,6 +16,11 @@ final class ZipContainer implements ContainerInterface
     /** @var array<string, int> Uncompressed entry sizes. */
     private array $entries = [];
 
+    /** Running totals over live entries, so limit checks do not rescan the map on every write. */
+    private int $liveBytes = 0;
+
+    private int $liveEntryCount = 0;
+
     /** @var array<string, string|resource|\Closure(): string> */
     private array $staged = [];
 
@@ -98,7 +103,7 @@ final class ZipContainer implements ContainerInterface
                         $limits->maximumPackageBytes,
                     ));
                 }
-                $container->entries[$name] = $entry['size'];
+                $container->setEntry($name, $entry['size']);
             }
 
             $sourceState->assertUnchanged();
@@ -214,8 +219,7 @@ final class ZipContainer implements ContainerInterface
         $this->assertWriteWithinLimits($name, strlen($contents));
         $this->closeStagedResource($name);
         $this->staged[$name] = $contents;
-        $this->entries[$name] = strlen($contents);
-        unset($this->removed[$name]);
+        $this->setEntry($name, strlen($contents));
         unset($this->moved[$name]);
     }
 
@@ -223,7 +227,7 @@ final class ZipContainer implements ContainerInterface
     {
         self::assertSafeEntryName($name);
         // Size is unknown until produced; entry-count limits apply now, byte limits in resolveStaged().
-        if (!$this->has($name) && $this->currentEntryCount() >= $this->limits->maximumEntries) {
+        if (!$this->has($name) && $this->liveEntryCount >= $this->limits->maximumEntries) {
             throw new PackageLimitException(sprintf(
                 'Package exceeds the configured maximum of %d entries.',
                 $this->limits->maximumEntries,
@@ -231,8 +235,7 @@ final class ZipContainer implements ContainerInterface
         }
         $this->closeStagedResource($name);
         $this->staged[$name] = $contents;
-        $this->entries[$name] = 0;
-        unset($this->removed[$name]);
+        $this->setEntry($name, 0);
         unset($this->moved[$name]);
     }
 
@@ -276,8 +279,7 @@ final class ZipContainer implements ContainerInterface
             rewind($staged);
             $this->closeStagedResource($name);
             $this->staged[$name] = $staged;
-            $this->entries[$name] = $bytes;
-            unset($this->removed[$name]);
+            $this->setEntry($name, $bytes);
             unset($this->moved[$name]);
         } catch (\Throwable $exception) {
             fclose($staged);
@@ -291,6 +293,10 @@ final class ZipContainer implements ContainerInterface
         $this->closeStagedResource($name);
         unset($this->staged[$name]);
         unset($this->moved[$name]);
+        if ($this->has($name)) {
+            $this->liveBytes -= $this->entries[$name];
+            --$this->liveEntryCount;
+        }
         if (isset($this->entries[$name])) {
             $this->removed[$name] = true;
         }
@@ -404,18 +410,6 @@ final class ZipContainer implements ContainerInterface
         $archive->close();
     }
 
-    private function currentSize(): int
-    {
-        $bytes = 0;
-        foreach ($this->entries as $name => $size) {
-            if (!isset($this->removed[$name])) {
-                $bytes += $size;
-            }
-        }
-
-        return $bytes;
-    }
-
     private function assertWriteWithinLimits(string $name, int $contentsBytes): void
     {
         if ($contentsBytes > $this->limits->maximumPartBytes) {
@@ -426,13 +420,13 @@ final class ZipContainer implements ContainerInterface
             ));
         }
         $existingBytes = $this->has($name) ? $this->entries[$name] : 0;
-        if ($this->currentSize() - $existingBytes + $contentsBytes > $this->limits->maximumPackageBytes) {
+        if ($this->liveBytes - $existingBytes + $contentsBytes > $this->limits->maximumPackageBytes) {
             throw new PackageLimitException(sprintf(
                 'Package exceeds the configured maximum of %d bytes.',
                 $this->limits->maximumPackageBytes,
             ));
         }
-        if (!$this->has($name) && $this->currentEntryCount() >= $this->limits->maximumEntries) {
+        if (!$this->has($name) && $this->liveEntryCount >= $this->limits->maximumEntries) {
             throw new PackageLimitException(sprintf(
                 'Package exceeds the configured maximum of %d entries.',
                 $this->limits->maximumEntries,
@@ -440,14 +434,17 @@ final class ZipContainer implements ContainerInterface
         }
     }
 
-    private function currentEntryCount(): int
+    /** Record a live entry's size, replacing a previous live size or reviving a removed name. */
+    private function setEntry(string $name, int $size): void
     {
-        $count = 0;
-        foreach ($this->entries() as $_name) {
-            ++$count;
+        if ($this->has($name)) {
+            $this->liveBytes -= $this->entries[$name];
+        } else {
+            ++$this->liveEntryCount;
         }
-
-        return $count;
+        $this->entries[$name] = $size;
+        $this->liveBytes += $size;
+        unset($this->removed[$name]);
     }
 
     /**
@@ -543,7 +540,7 @@ final class ZipContainer implements ContainerInterface
         $produced = $contents();
         $this->assertWriteWithinLimits($name, strlen($produced));
         $this->staged[$name] = $produced;
-        $this->entries[$name] = strlen($produced);
+        $this->setEntry($name, strlen($produced));
 
         return $produced;
     }
