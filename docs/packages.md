@@ -168,6 +168,10 @@ fails, the original file remains untouched.
 The library detects concurrent source changes before lazy reads and saves. It
 uses filesystem identity, size, and timestamps for inexpensive read checks, and
 verifies the complete SHA-256 fingerprint before replacing an opened source.
+Read-time metadata is a fast guard rather than proof of byte identity: an
+in-place rewrite that preserves the file identity and changes neither its size
+nor its second-resolution timestamps may be noticed only by the full save-time
+fingerprint check.
 Use `discardChanges()` to restore the opened source state. For a focused edit,
 use a callback that saves only after successful completion:
 
@@ -197,9 +201,13 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `removePartAndRelationships(string $name): PartRemovalResult` | Explicitly remove a part and every inbound relationship. |
 | `movePart(string $source, string $destination): PartInterface` | Move a part and update relationships that depend on its name. |
 | `getRelationships(?string $sourcePartName = null): Relationships` | Read package or part relationships. |
+| `addRelationship(...)` | Add a package-level or part-level relationship. |
+| `removeRelationship(string $id, ?string $sourcePartName = null): void` | Remove a package-level or part-level relationship. |
 | `inspectSignatures(): SignatureInspection` | Inspect the OPC signature structure and return its status, parts, references, and issues. |
 | `removeSignatures(): SignatureRemovalResult` | Explicitly stage removal of signature parts, certificates, relationships, and content types. |
 | `validate(): array` | Return structural issues without saving. |
+| `analyzeRepairs(PackageRepairOptions $options): RepairReport` | Report enabled safe repairs without changing the package. |
+| `applyRepairs(PackageRepairOptions $options): RepairReport` | Stage enabled repairs and return the applied actions. |
 | `hasChanges(): bool` | Report whether edits are staged. |
 | `discardChanges(): void` | Restore the source package or reset a new package. |
 | `save(): void` | Atomically replace the opened source. |
@@ -233,12 +241,15 @@ relationship content types, and unsupported digital-signature preservation.
 
 | Method | Description |
 | --- | --- |
+| `create(string $type, string $target, bool $external = false, ?string $id = null): RelationshipInterface` | Create and add a relationship. |
+| `add(RelationshipInterface $relationship): void` | Add an existing relationship object. |
 | `get(string $id): RelationshipInterface` | Return a relationship by ID. |
 | `firstByType(string $type): ?RelationshipInterface` | Return the first relationship with an exact type. |
 | `getByType(string $type): array` | Return every relationship with an exact type. |
 | `firstByTarget(string $target): ?RelationshipInterface` | Match the serialized target exactly. |
 | `getByTarget(string $target): array` | Return all exact serialized-target matches. |
 | `getByTargetPart(string $partName): array` | Match internal relationships by normalized resolved part name. |
+| `remove(string $id): void` | Remove one relationship by ID. |
 | `retarget(string $id, string $target): RelationshipInterface` | Replace a target while preserving ID, type, and target mode. |
 | `removeByTargetPart(string $partName): int` | Remove internal relationships to a resolved part and return their count. |
 
