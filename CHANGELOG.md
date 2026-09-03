@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- New packages write `[Content_Types].xml` as the first ZIP entry, as OPC
+  expects for streaming readers, instead of appending it after every part.
 - `hasPart()` returns `false` for package metadata and invalid OPC part names
   instead of throwing while performing an existence check.
 

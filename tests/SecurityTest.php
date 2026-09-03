@@ -82,11 +82,11 @@ final class SecurityTest extends TestCase
 
     public function testPartSizeLimitAppliesBeforeWriting(): void
     {
-        $limits = new PackageLimits(maximumPartBytes: 4);
+        $limits = new PackageLimits(maximumPartBytes: 512);
         $package = OpenXmlPackage::create($limits);
 
         $this->expectException(PackageLimitException::class);
-        $package->addPart('/large.bin', 'application/octet-stream', '12345');
+        $package->addPart('/large.bin', 'application/octet-stream', str_repeat('x', 513));
     }
 
     public function testUnsafeZipEntryNameIsRejected(): void
