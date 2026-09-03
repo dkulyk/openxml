@@ -188,7 +188,15 @@ final class EncryptedOfficeFileTest extends TestCase
     public static function agileProfiles(): iterable
     {
         yield 'AES-128/SHA-1' => [128, 'SHA1'];
+        yield 'AES-128/SHA-256' => [128, 'SHA256'];
+        yield 'AES-128/SHA-384' => [128, 'SHA384'];
+        yield 'AES-128/SHA-512' => [128, 'SHA512'];
+        yield 'AES-192/SHA-1' => [192, 'SHA1'];
         yield 'AES-192/SHA-256' => [192, 'SHA256'];
+        yield 'AES-192/SHA-384' => [192, 'SHA384'];
+        yield 'AES-192/SHA-512' => [192, 'SHA512'];
+        yield 'AES-256/SHA-1' => [256, 'SHA1'];
+        yield 'AES-256/SHA-256' => [256, 'SHA256'];
         yield 'AES-256/SHA-384' => [256, 'SHA384'];
         yield 'AES-256/SHA-512' => [256, 'SHA512'];
     }
