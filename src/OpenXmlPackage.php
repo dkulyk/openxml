@@ -440,7 +440,7 @@ final class OpenXmlPackage implements PackageInterface
             $requestedSourcePartName = PartName::normalize($sourcePartName);
             if (PartName::isRelationshipsPart($requestedSourcePartName)) {
                 throw new PartNotFoundException(sprintf(
-                    'Relationship source part does not exist: %s',
+                    'Relationship parts cannot own relationships: %s',
                     $requestedSourcePartName,
                 ));
             }
