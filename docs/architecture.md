@@ -11,7 +11,8 @@ DK\OpenXml\OpenXmlPackage
 ├── Packaging\ContentTypes
 ├── Signature\SignatureInspection / PackageSignature
 └── Internal\Container\ContainerInterface
-    └── Internal\Container\ZipContainer
+    ├── Internal\Container\ZipContainer
+    └── Internal\MaterializationPool
 
 DK\OpenXml\Encryption\EncryptedOfficeFile
 ├── Internal\Encryption\AgileEncryption (compatible profiles read, modern profile write)
@@ -28,6 +29,12 @@ when opening a package and loads content only when requested.
 Streamed writes are staged in temporary storage. Unchanged entries use ZIP
 copy-through, preserving their compressed representation during a save. Complete
 output is validated in a same-directory temporary file before atomic replacement.
+
+Unchanged ZIP-backed parts can expose a native `zip://` URI to deferred
+path-based consumers. When an entry is staged or a local path is required, the
+internal materialization pool copies it to private temporary storage. This pool
+is an implementation detail: callers receive ordinary strings, and the package
+owns their lifetime.
 
 The internal boundary allows container infrastructure to move into a shared
 package later if ODF or another format demonstrates a real common abstraction. No
@@ -49,7 +56,8 @@ policies are defined.
 
 ## Current limitations
 
-- `getContents()` materializes a complete part; use `openStream()` for large payloads.
+- `getContents()` materializes a complete part; use `openStream()` or the path
+  APIs for large payloads.
 - Encrypted documents must be decrypted before opening them as OPC.
 - Digital-signature structure can be inspected, but signatures are not
   cryptographically verified or preserved when saving.

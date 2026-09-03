@@ -14,6 +14,7 @@ use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\Internal\AtomicFileWriter;
 use DK\OpenXml\Internal\Container\ContainerInterface;
 use DK\OpenXml\Internal\Container\ZipContainer;
+use DK\OpenXml\Internal\MaterializationPool;
 use DK\OpenXml\Internal\PackageRepairer;
 use DK\OpenXml\Internal\SignatureInspector;
 use DK\OpenXml\Packaging\ContentTypes;
@@ -42,6 +43,10 @@ final class OpenXmlPackage implements PackageInterface
     /** @var array<string, Relationships> Source part name ('' for the package) => live relationship collection. */
     private array $relationships = [];
 
+    private MaterializationPool $materializations;
+
+    private int $contentRevision = 0;
+
     private function __construct(
         private ContainerInterface $container,
         private ContentTypes $contentTypes,
@@ -50,6 +55,7 @@ final class OpenXmlPackage implements PackageInterface
         private bool $changed = false,
         private PackageLimits $limits = new PackageLimits(),
     ) {
+        $this->materializations = new MaterializationPool();
         $this->rebuildPartNameIndex();
     }
 
@@ -186,6 +192,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->container->write(PartName::entry($name), $contents);
         $this->contentTypes->setOverride($name, $contentType);
         $this->partNames[strtolower($name)] = $name;
+        ++$this->contentRevision;
         $this->changed = true;
 
         return $this->getPart($name);
@@ -202,9 +209,21 @@ final class OpenXmlPackage implements PackageInterface
         $this->container->writeStream(PartName::entry($name), $stream);
         $this->contentTypes->setOverride($name, $contentType);
         $this->partNames[strtolower($name)] = $name;
+        ++$this->contentRevision;
         $this->changed = true;
 
         return $this->getPart($name);
+    }
+
+    public function addPartFromPath(string $name, string $contentType, string $path): PartInterface
+    {
+        $stream = self::openReadableFile($path);
+
+        try {
+            return $this->addPartFromStream($name, $contentType, $stream);
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function readPart(string $name): string
@@ -230,6 +249,26 @@ final class OpenXmlPackage implements PackageInterface
         return $this->container->openStream(PartName::entry($name));
     }
 
+    public function getPartReadablePath(string $name): string
+    {
+        $name = $this->existingPartName($name);
+
+        return $this->container->getReadablePath(PartName::entry($name))
+            ?? $this->getPartLocalPath($name);
+    }
+
+    public function getPartLocalPath(string $name): string
+    {
+        $name = $this->existingPartName($name);
+        $key = $this->contentRevision . "\0" . strtolower($name);
+
+        return $this->materializations->materialize(
+            $key,
+            PartName::entry($name),
+            fn() => $this->container->openStream(PartName::entry($name)),
+        );
+    }
+
     public function writePart(string $name, string $contents): void
     {
         $requestedName = PartName::normalize($name);
@@ -239,6 +278,7 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         $this->container->write(PartName::entry($name), $contents);
+        ++$this->contentRevision;
         $this->changed = true;
     }
 
@@ -252,7 +292,19 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         $this->container->writeStream(PartName::entry($name), $stream);
+        ++$this->contentRevision;
         $this->changed = true;
+    }
+
+    public function writePartFromPath(string $name, string $path): void
+    {
+        $stream = self::openReadableFile($path);
+
+        try {
+            $this->writePartFromStream($name, $stream);
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function removePart(string $name): void
@@ -326,6 +378,7 @@ final class OpenXmlPackage implements PackageInterface
             $this->partNames[strtolower($relationshipPartName)],
             $this->relationships[$name],
         );
+        ++$this->contentRevision;
         $this->changed = true;
     }
 
@@ -381,6 +434,7 @@ final class OpenXmlPackage implements PackageInterface
             $this->getRelationships($relationshipSource)->retarget($id, $target);
         }
 
+        ++$this->contentRevision;
         $this->changed = true;
 
         return $this->getPart($destination);
@@ -653,6 +707,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->sourceFingerprint = $freshPackage->sourceFingerprint;
         $this->partNames = $freshPackage->partNames;
         $this->relationships = [];
+        ++$this->contentRevision;
         $this->changed = false;
     }
 
@@ -831,6 +886,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->sourceFingerprint = self::fingerprint($this->sourceFilename);
         $this->container = ZipContainer::open($this->sourceFilename, $this->limits);
         $this->rebuildPartNameIndex();
+        ++$this->contentRevision;
         $this->changed = false;
     }
 
@@ -915,6 +971,17 @@ final class OpenXmlPackage implements PackageInterface
         return $this->partNames[strtolower($name)] ?? null;
     }
 
+    private function existingPartName(string $name): string
+    {
+        $requestedName = PartName::normalize($name);
+        $name = $this->findPartName($requestedName);
+        if ($name === null) {
+            throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
+        }
+
+        return $name;
+    }
+
     private function rebuildPartNameIndex(): void
     {
         $this->partNames = [];
@@ -937,6 +1004,22 @@ final class OpenXmlPackage implements PackageInterface
         }
 
         return $resolvedFilename;
+    }
+
+    /** @return resource */
+    private static function openReadableFile(string $path)
+    {
+        $resolvedPath = realpath($path);
+        if ($resolvedPath === false || !is_file($resolvedPath) || !is_readable($resolvedPath)) {
+            throw new OpenXmlException(sprintf('Local file "%s" is not readable.', $path));
+        }
+
+        $stream = @fopen($resolvedPath, 'rb');
+        if ($stream === false) {
+            throw new OpenXmlException(sprintf('Unable to open local file "%s".', $path));
+        }
+
+        return $stream;
     }
 
     private static function fingerprint(string $filename): string

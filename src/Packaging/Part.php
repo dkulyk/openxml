@@ -41,9 +41,24 @@ final class Part implements PartInterface
         return $this->package->openPartStream($this->name);
     }
 
+    public function getReadablePath(): string
+    {
+        return $this->package->getPartReadablePath($this->name);
+    }
+
+    public function getLocalPath(): string
+    {
+        return $this->package->getPartLocalPath($this->name);
+    }
+
     public function setContentsFromStream($stream): void
     {
         $this->package->writePartFromStream($this->name, $stream);
+    }
+
+    public function setContentsFromPath(string $path): void
+    {
+        $this->package->writePartFromPath($this->name, $path);
     }
 
     public function getRelationships(): Relationships

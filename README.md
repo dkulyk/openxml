@@ -17,6 +17,8 @@ PresentationML documents.
 
 - Read, create, and atomically update OPC packages.
 - Stream large images and embedded files without keeping them in PHP strings.
+- Pass unchanged parts to path-based consumers through `zip://` URIs, with
+  automatic package-owned local materialization when a native URI is unavailable.
 - Navigate and modify package-level and part-level relationships.
 - Inspect OPC digital-signature parts and references without claiming cryptographic verification.
 - Explicitly remove signature material when producing an unsigned copy.
