@@ -169,13 +169,13 @@ validated, and moved over the destination. Unchanged entries retain their
 compressed representation through ZIP copy-through. If validation or writing
 fails, the original file remains untouched.
 
-The library detects concurrent source changes before lazy reads and saves. It
-uses filesystem identity, size, and timestamps for inexpensive read checks, and
-verifies the complete SHA-256 fingerprint before replacing an opened source.
-Read-time metadata is a fast guard rather than proof of byte identity: an
-in-place rewrite that preserves the file identity and changes neither its size
-nor its second-resolution timestamps may be noticed only by the full save-time
-fingerprint check.
+The library detects concurrent source changes before lazy reads and saves by
+comparing the file identity (device and inode), size, and second-resolution
+modification and change timestamps recorded when the source was opened. This
+is a fast guard rather than proof of byte identity: a replacement through
+rename changes the inode and an in-place rewrite changes the change timestamp,
+but an in-place rewrite of the same inode that keeps the size within the same
+second is not noticed. The package never hashes the source or its output.
 Use `discardChanges()` to restore the opened source state. For a focused edit,
 use a callback that saves only after successful completion:
 

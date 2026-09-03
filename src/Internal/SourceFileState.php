@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace DK\OpenXml\Internal;
 
 use DK\OpenXml\Exception\ConcurrentModificationException;
-use DK\OpenXml\Exception\OpenXmlException;
 
 /** @internal */
 final class SourceFileState
@@ -13,36 +12,13 @@ final class SourceFileState
     /** @param array{size: int, mtime: int, ctime: int, dev: int, ino: int} $metadata */
     private function __construct(
         private string $filename,
-        private string $fingerprint,
         private array $metadata,
     ) {}
 
-    public static function capture(string $filename, ?string $knownFingerprint = null): self
+    /** Record the file identity, size, and timestamps that later reads and saves are checked against. */
+    public static function capture(string $filename): self
     {
-        if ($knownFingerprint !== null) {
-            return new self($filename, $knownFingerprint, self::readMetadata($filename));
-        }
-
-        $metadataBeforeHashing = self::readMetadata($filename);
-        $fingerprint = @hash_file('sha256', $filename);
-        if ($fingerprint === false) {
-            throw new OpenXmlException(sprintf('Unable to fingerprint package "%s".', $filename));
-        }
-
-        $state = new self($filename, $fingerprint, self::readMetadata($filename));
-        if ($metadataBeforeHashing !== $state->metadata) {
-            throw new ConcurrentModificationException(sprintf(
-                'Package "%s" changed while it was being opened.',
-                $filename,
-            ));
-        }
-
-        return $state;
-    }
-
-    public function fingerprint(): string
-    {
-        return $this->fingerprint;
+        return new self($filename, self::readMetadata($filename));
     }
 
     public function assertUnchanged(): void
