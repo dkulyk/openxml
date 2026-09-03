@@ -596,6 +596,22 @@ final class OpenXmlPackage implements PackageInterface
         return new SignatureRemovalResult($removedPartNames, $removedRelationships);
     }
 
+    /** Whether any signature part or origin relationship exists; without them inspection reports an unsigned package. */
+    private function hasSignatureMaterial(): bool
+    {
+        foreach ($this->partNames as $partName) {
+            if ($this->isSignaturePart($partName)) {
+                return true;
+            }
+        }
+
+        try {
+            return $this->getRelationships()->getByType(RelationshipType::DIGITAL_SIGNATURE_ORIGIN) !== [];
+        } catch (OpenXmlException) {
+            return true;
+        }
+    }
+
     private function isSignaturePart(string $partName): bool
     {
         return str_starts_with(strtolower($partName), '/_xmlsignatures/')
@@ -620,12 +636,14 @@ final class OpenXmlPackage implements PackageInterface
     {
         $issues = [];
 
-        $signatureInspection = $this->inspectSignatures();
-        if ($signatureInspection->status !== SignatureStatus::Unsigned) {
-            $issues[] = 'Digitally signed packages cannot be saved because signature preservation is not supported.';
-        }
-        foreach ($signatureInspection->getIssues() as $signatureIssue) {
-            $issues[] = 'Digital signature: ' . $signatureIssue;
+        if ($this->hasSignatureMaterial()) {
+            $signatureInspection = $this->inspectSignatures();
+            if ($signatureInspection->status !== SignatureStatus::Unsigned) {
+                $issues[] = 'Digitally signed packages cannot be saved because signature preservation is not supported.';
+            }
+            foreach ($signatureInspection->getIssues() as $signatureIssue) {
+                $issues[] = 'Digital signature: ' . $signatureIssue;
+            }
         }
 
         $partNames = $this->collectPartNames($issues);
