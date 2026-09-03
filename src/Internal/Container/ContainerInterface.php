@@ -22,6 +22,14 @@ interface ContainerInterface
 
     public function write(string $name, string $contents): void;
 
+    /**
+     * Stage contents produced on first read or save. The producer is invoked at
+     * most once; byte limits are enforced when it runs.
+     *
+     * @param \Closure(): string $contents
+     */
+    public function writeLazy(string $name, \Closure $contents): void;
+
     /** @param resource $stream */
     public function writeStream(string $name, $stream): void;
 
