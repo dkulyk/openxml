@@ -25,6 +25,9 @@ interface PackageInterface
 
     public function addPartFromPath(string $name, string $contentType, string $path): PartInterface;
 
+    /** Declare a content type for every part with this extension that has no override. */
+    public function setDefaultContentType(string $extension, string $contentType): void;
+
     public function removePart(string $name): void;
 
     /** @return list<RelationshipReference> */

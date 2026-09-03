@@ -199,6 +199,7 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
 | `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
 | `addPartFromPath(string $name, string $contentType, string $path): PartInterface` | Stage bytes copied from a readable local file. |
+| `setDefaultContentType(string $extension, string $contentType): void` | Declare a content type for every part with this extension that has no override. |
 | `removePart(string $name): void` | Remove an unreferenced part and its relationship part. |
 | `getInboundRelationships(string $partName): array` | Return package and part relationships targeting a part. |
 | `removePartAndRelationships(string $name): PartRemovalResult` | Explicitly remove a part and every inbound relationship. |
@@ -221,6 +222,13 @@ methods below, but their contents cannot be replaced through `PartInterface` or
 the raw write methods. Use `getRelationships()`, `addRelationship()`, and
 `removeRelationship()` so the in-memory relationship collection and its XML
 representation remain synchronized.
+
+New packages declare `Default` content types for `rels` and `xml`. Adding a part
+whose content type already matches the default for its extension writes no
+`Override`; any other content type gets one. Declare further defaults with
+`setDefaultContentType()` before adding media parts to keep
+`[Content_Types].xml` small. Resolution follows OPC: an `Override` for the part
+name wins, otherwise the `Default` for its extension applies.
 
 `inspectSignatures()` is structural inspection, not cryptographic verification.
 See [Digital signatures](signatures.md) for its trust boundary and examples.

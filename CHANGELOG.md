@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added
+
+- `setDefaultContentType()` declares a `Default` content type by extension, so
+  consumers can cover media parts with one declaration instead of an `Override`
+  per part.
+
+### Changed
+
+- New packages declare `Default Extension="xml"` as `application/xml` alongside
+  `rels`, and adding or moving a part whose content type already matches the
+  default for its extension no longer writes an `Override`.
+
 ## [0.7.0] - 2026-09-04
 
 ### Added
