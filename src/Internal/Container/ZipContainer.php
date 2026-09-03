@@ -16,7 +16,7 @@ final class ZipContainer implements ContainerInterface
     /** @var array<string, int> Uncompressed entry sizes. */
     private array $entries = [];
 
-    /** @var array<string, string|resource> */
+    /** @var array<string, string|resource|\Closure(): string> */
     private array $staged = [];
 
     /** @var array<string, true> */
@@ -141,7 +141,7 @@ final class ZipContainer implements ContainerInterface
             throw new OpenXmlException(sprintf('ZIP entry "%s" does not exist.', $name));
         }
         if (isset($this->staged[$name])) {
-            return $this->copyToIndependentStream($this->staged[$name], $name);
+            return $this->copyToIndependentStream($this->resolveStaged($name), $name);
         }
         $sourceFilename = $this->sourceFilename;
         if ($sourceFilename === null) {
@@ -215,6 +215,23 @@ final class ZipContainer implements ContainerInterface
         $this->closeStagedResource($name);
         $this->staged[$name] = $contents;
         $this->entries[$name] = strlen($contents);
+        unset($this->removed[$name]);
+        unset($this->moved[$name]);
+    }
+
+    public function writeLazy(string $name, \Closure $contents): void
+    {
+        self::assertSafeEntryName($name);
+        // Size is unknown until produced; entry-count limits apply now, byte limits in resolveStaged().
+        if (!$this->has($name) && $this->currentEntryCount() >= $this->limits->maximumEntries) {
+            throw new PackageLimitException(sprintf(
+                'Package exceeds the configured maximum of %d entries.',
+                $this->limits->maximumEntries,
+            ));
+        }
+        $this->closeStagedResource($name);
+        $this->staged[$name] = $contents;
+        $this->entries[$name] = 0;
         unset($this->removed[$name]);
         unset($this->moved[$name]);
     }
@@ -340,7 +357,8 @@ final class ZipContainer implements ContainerInterface
                     throw new OpenXmlException(sprintf('Unable to remove ZIP entry "%s".', $entryName));
                 }
             }
-            foreach ($this->staged as $entryName => $contents) {
+            foreach (array_keys($this->staged) as $entryName) {
+                $contents = $this->resolveStaged($entryName);
                 $written = is_string($contents)
                     ? $archive->addFromString($entryName, $contents)
                     : $this->addStreamFile($archive, $entryName, $contents);
@@ -508,6 +526,26 @@ final class ZipContainer implements ContainerInterface
         }
 
         return $archive->addFile($path, $entryName);
+    }
+
+    /**
+     * Produce lazily staged contents once and keep the result.
+     *
+     * @return string|resource
+     */
+    private function resolveStaged(string $name)
+    {
+        $contents = $this->staged[$name];
+        if (!$contents instanceof \Closure) {
+            return $contents;
+        }
+
+        $produced = $contents();
+        $this->assertWriteWithinLimits($name, strlen($produced));
+        $this->staged[$name] = $produced;
+        $this->entries[$name] = strlen($produced);
+
+        return $produced;
     }
 
     private function closeStagedResource(string $name): void

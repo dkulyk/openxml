@@ -70,6 +70,16 @@ try {
     $saveSeconds = (hrtime(true) - $started) / 1_000_000_000;
     printf("Copy-through save: %.3f ms\n", $saveSeconds * 1000);
 
+    $relationshipPackage = OpenXmlPackage::create();
+    $relationshipPackage->addPart('/document.xml', 'application/xml', '<document/>');
+    $started = hrtime(true);
+    for ($index = 0; $index < 800; ++$index) {
+        $relationshipPackage->addRelationship('urn:type-' . $index, 'document.xml');
+    }
+    $relationshipSeconds = (hrtime(true) - $started) / 1_000_000_000;
+    printf("800 package relationships: %.3f ms\n", $relationshipSeconds * 1000);
+    unset($relationshipPackage);
+
     echo "Part registration:\n";
     foreach ([50, 100, 200, 400, 800] as $partCount) {
         $registrationPackage = OpenXmlPackage::create();
