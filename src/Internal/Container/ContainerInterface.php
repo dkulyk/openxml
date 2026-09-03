@@ -14,6 +14,9 @@ interface ContainerInterface
     /** @return resource */
     public function openStream(string $name);
 
+    /** Return a PHP-readable native URI when the current contents have one. */
+    public function getReadablePath(string $name): ?string;
+
     /** @return iterable<string> */
     public function entries(): iterable;
 

@@ -154,6 +154,119 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame('new streamed contents', $part->getContents());
     }
 
+    public function testUnchangedPartExposesAReadableZipUri(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/image.bin', 'application/octet-stream', 'image bytes');
+        $package->saveAs($this->filename);
+
+        $part = OpenXmlPackage::open($this->filename)->getPart('/media/image.bin');
+        $path = $part->getReadablePath();
+
+        self::assertStringStartsWith('zip://', $path);
+        self::assertSame('image bytes', file_get_contents($path));
+    }
+
+    public function testMovedUnchangedPartKeepsAReadableZipUri(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/source.bin', 'application/octet-stream', 'image bytes');
+        $package->saveAs($this->filename);
+
+        $package = OpenXmlPackage::open($this->filename);
+        $part = $package->movePart('/media/source.bin', '/assets/destination.bin');
+        $path = $part->getReadablePath();
+
+        self::assertStringStartsWith('zip://', $path);
+        self::assertStringEndsWith('#media/source.bin', $path);
+        self::assertSame('image bytes', file_get_contents($path));
+    }
+
+    public function testReadablePathFallsBackToALocalFileWhenZipUriIsUnsafe(): void
+    {
+        $filename = $this->filename . '#package.docx';
+
+        try {
+            $package = OpenXmlPackage::create();
+            $package->addPart('/media/image.bin', 'application/octet-stream', 'image bytes');
+            $package->saveAs($filename);
+
+            $package = OpenXmlPackage::open($filename);
+            $path = $package->getPart('/media/image.bin')->getReadablePath();
+
+            self::assertStringNotContainsString('zip://', $path);
+            self::assertFileExists($path);
+            self::assertSame('image bytes', file_get_contents($path));
+        } finally {
+            if (is_file($filename)) {
+                unlink($filename);
+            }
+        }
+    }
+
+    public function testStagedPartIsMaterializedToAStableLocalPath(): void
+    {
+        $package = OpenXmlPackage::create();
+        $part = $package->addPart('/media/image.png', 'image/png', 'old image');
+
+        $oldPath = $part->getReadablePath();
+        self::assertSame($oldPath, $part->getLocalPath());
+        self::assertSame('old image', file_get_contents($oldPath));
+
+        $part->setContents('new image');
+        $newPath = $part->getLocalPath();
+
+        self::assertNotSame($oldPath, $newPath);
+        self::assertSame('old image', file_get_contents($oldPath));
+        self::assertSame('new image', file_get_contents($newPath));
+    }
+
+    public function testMaterializedFilesAreOwnedByThePackage(): void
+    {
+        $package = OpenXmlPackage::create();
+        $part = $package->addPart('/media/image.bin', 'application/octet-stream', 'image bytes');
+        $path = $part->getLocalPath();
+        self::assertFileExists($path);
+
+        unset($part, $package);
+
+        self::assertFileDoesNotExist($path);
+    }
+
+    public function testPartContentsCanBeCopiedFromLocalPaths(): void
+    {
+        $source = tempnam(sys_get_temp_dir(), 'openxml-source-');
+        self::assertNotFalse($source);
+
+        try {
+            file_put_contents($source, 'first contents');
+            $package = OpenXmlPackage::create();
+            $part = $package->addPartFromPath('/media.bin', 'application/octet-stream', $source);
+
+            file_put_contents($source, 'second contents');
+            $part->setContentsFromPath($source);
+            unlink($source);
+
+            self::assertSame('second contents', $part->getContents());
+        } finally {
+            if (is_file($source)) {
+                unlink($source);
+            }
+        }
+    }
+
+    public function testPartPathInputMustBeALocalReadableFile(): void
+    {
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Local file');
+
+        OpenXmlPackage::create()->addPartFromPath(
+            '/media.bin',
+            'application/octet-stream',
+            'php://memory',
+        );
+    }
+
     public function testFailedStreamWriteLeavesExistingPartUntouched(): void
     {
         $package = OpenXmlPackage::create(new PackageLimits(

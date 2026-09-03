@@ -17,8 +17,16 @@ interface PartInterface
     /** @return resource */
     public function openStream();
 
+    /** Return a PHP-readable ZIP URI or a package-owned local path valid for the package lifetime. */
+    public function getReadablePath(): string;
+
+    /** Return a package-owned local filesystem path valid for the package lifetime. */
+    public function getLocalPath(): string;
+
     /** @param resource $stream */
     public function setContentsFromStream($stream): void;
+
+    public function setContentsFromPath(string $path): void;
 
     public function getRelationships(): Relationships;
 

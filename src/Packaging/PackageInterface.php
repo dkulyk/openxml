@@ -23,6 +23,8 @@ interface PackageInterface
     /** @param resource $stream */
     public function addPartFromStream(string $name, string $contentType, $stream): PartInterface;
 
+    public function addPartFromPath(string $name, string $contentType, string $path): PartInterface;
+
     public function removePart(string $name): void;
 
     /** @return list<RelationshipReference> */

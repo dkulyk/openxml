@@ -27,6 +27,12 @@ ratios, DTDs, malformed content-type and relationship XML, and data beyond the
 configured limits. It also rejects case-equivalent part names, names derivable
 from another part name, and percent-encoded aliases before part contents are read.
 
+`getLocalPath()` and the local fallback of `getReadablePath()` create private
+temporary files containing the uncompressed part bytes. They use a private
+directory and are removed when the owning package is released. Applications must
+keep the package alive while paths are in use and should treat those paths as
+sensitive when parts contain confidential data.
+
 ## Encryption limits
 
 Encrypted input has separate bounds for attacker-controlled password work and

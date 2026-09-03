@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added
+
+- Deferred part paths using native `zip://` URIs for unchanged entries and
+  package-owned local materialization for staged content and path-only consumers.
+- Local path-based APIs for adding and replacing large parts without first
+  loading their contents into PHP strings.
+
 ## [0.5.0] - 2026-09-02
 
 ### Added

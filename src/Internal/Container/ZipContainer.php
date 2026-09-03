@@ -158,6 +158,26 @@ final class ZipContainer implements ContainerInterface
         }
     }
 
+    public function getReadablePath(string $name): ?string
+    {
+        if (!$this->has($name)) {
+            throw new OpenXmlException(sprintf('ZIP entry "%s" does not exist.', $name));
+        }
+        $sourceFilename = $this->sourceFilename;
+        if (isset($this->staged[$name]) || $sourceFilename === null) {
+            return null;
+        }
+        if (!in_array('zip', stream_get_wrappers(), true) || str_contains($sourceFilename, '#')) {
+            return null;
+        }
+
+        $this->assertSourceUnchanged();
+        $sourceFilename = str_replace('\\', '/', $sourceFilename);
+        $sourceEntryName = $this->moved[$name] ?? $name;
+
+        return 'zip://' . $sourceFilename . '#' . $sourceEntryName;
+    }
+
     public function entries(): iterable
     {
         foreach ($this->entries as $name => $_size) {

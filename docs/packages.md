@@ -90,6 +90,46 @@ The caller owns streams returned by `openStream()` and must close them. Each is
 an independent temporary stream and remains usable if the package object is later
 released. Use `getContents()` and `setContents()` for small parts.
 
+## Paths for deferred consumers
+
+Some image libraries and document writers accept a filename but not a PHP stream.
+Use `getReadablePath()` when they understand PHP stream-wrapper paths:
+
+```php
+$package = OpenXmlPackage::open('slides.pptx');
+$image = $package->getPart('/ppt/media/image1.png');
+
+$writer->setImagePath($image->getReadablePath());
+```
+
+For an unchanged part in an opened ZIP, this normally returns a `zip://` URI and
+avoids copying the entry before the consumer reads it. New and modified parts are
+materialized automatically. Use `getLocalPath()` when the consumer specifically
+requires a real local filesystem path.
+
+```php
+$writer->setImagePath($image->getLocalPath());
+```
+
+The package owns materialized files. A returned local path remains valid while
+the package is alive, including after that part is modified again. Keep the
+package alive until every deferred consumer has finished reading its paths.
+
+Local files can also be copied into a part without loading them into a string:
+
+```php
+$image = $package->addPartFromPath(
+    '/ppt/media/image2.png',
+    'image/png',
+    'photo.png',
+);
+
+$image->setContentsFromPath('replacement.png');
+```
+
+Path input is copied immediately and is restricted to readable local files. Use
+the stream methods for other PHP stream wrappers.
+
 ## Atomic edits
 
 Mutations remain staged until `save()` or `saveAs()`:
@@ -132,6 +172,7 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `getParts(): Traversable` | Iterate ordinary package parts. |
 | `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
 | `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
+| `addPartFromPath(string $name, string $contentType, string $path): PartInterface` | Stage bytes copied from a readable local file. |
 | `removePart(string $name): void` | Remove an unreferenced part and its relationship part. |
 | `getInboundRelationships(string $partName): array` | Return package and part relationships targeting a part. |
 | `removePartAndRelationships(string $name): PartRemovalResult` | Explicitly remove a part and every inbound relationship. |
@@ -161,7 +202,10 @@ relationship content types, and unsupported digital-signature preservation.
 | `getContents(): string` | Materialize and return the complete part. |
 | `setContents(string $contents): void` | Stage complete string contents. |
 | `openStream(): resource` | Return an independent readable temporary stream owned by the caller. |
+| `getReadablePath(): string` | Return a `zip://` URI when possible, otherwise a package-owned local path. |
+| `getLocalPath(): string` | Return a package-owned local filesystem path. |
 | `setContentsFromStream(resource $stream): void` | Stage data from the current cursor to EOF. |
+| `setContentsFromPath(string $path): void` | Stage bytes copied from a readable local file. |
 | `getRelationships(): Relationships` | Return relationships originating at this part. |
 | `addRelationship(...)` | Create an internal or external relationship. |
 | `removeRelationship(string $id): void` | Remove a relationship by ID. |
