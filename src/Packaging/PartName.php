@@ -34,11 +34,14 @@ final class PartName
             self::validateSegment($segment, $name);
         }
         // Names repeat dozens of times per part during a build and save; the
-        // cache is bounded so long-lived workers do not accumulate every name.
-        if (count(self::$validated) >= 4096) {
-            self::$validated = [];
+        // cache is bounded in count and entry length so long-lived workers do
+        // not accumulate every name a package ever presented.
+        if (strlen($name) <= 255) {
+            if (count(self::$validated) >= 4096) {
+                self::$validated = [];
+            }
+            self::$validated[$name] = true;
         }
-        self::$validated[$name] = true;
 
         return $name;
     }
