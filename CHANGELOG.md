@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file. The format 
   and the raw part-reading APIs.
 - Raw part-writing APIs reject relationship parts, which must be changed through
   the relationship API to keep the in-memory collection and XML synchronized.
+- Relationships can be added before their source part exists. `validate()` and
+  saving report relationship parts whose source part never arrived, instead of
+  `getRelationships()` rejecting the source immediately.
 
 ### Fixed
 

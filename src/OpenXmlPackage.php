@@ -362,14 +362,14 @@ final class OpenXmlPackage implements PackageInterface
 
     private function removePartContents(string $name): void
     {
-        $relationshipPartName = PartName::relationshipsName($name);
+        $relationshipPartName = $this->relationshipsPartName($name);
 
         $this->container->remove(PartName::entry($name));
         $this->container->remove(PartName::entry($relationshipPartName));
         $this->contentTypes->removeOverride($name);
         $this->partNames->remove($name);
         $this->partNames->remove($relationshipPartName);
-        unset($this->relationships[$name]);
+        unset($this->relationships[strtolower($name)]);
         ++$this->contentRevision;
         $this->changed = true;
     }
@@ -395,8 +395,8 @@ final class OpenXmlPackage implements PackageInterface
 
         $contentType = $this->getPart($source)->getContentType();
         $relationshipChanges = $this->relationshipChangesForMove($source, $destination);
-        $sourceRelationshipPart = PartName::relationshipsName($source);
-        $destinationRelationshipPart = PartName::relationshipsName($destination);
+        $sourceRelationshipPart = $this->relationshipsPartName($source);
+        $destinationRelationshipPart = $this->relationshipsPartName($destination);
         if (
             $this->container->has(PartName::entry($sourceRelationshipPart))
             && $this->container->has(PartName::entry($destinationRelationshipPart))
@@ -421,7 +421,7 @@ final class OpenXmlPackage implements PackageInterface
         $this->contentTypes->setOverride($destination, $contentType);
         $this->partNames->remove($source);
         $this->partNames->add($destination);
-        unset($this->relationships[$source], $this->relationships[$destination]);
+        unset($this->relationships[strtolower($source)], $this->relationships[strtolower($destination)]);
 
         foreach ($relationshipChanges as [$relationshipSource, $id, $target]) {
             $this->getRelationships($relationshipSource)->retarget($id, $target);
@@ -437,18 +437,20 @@ final class OpenXmlPackage implements PackageInterface
     {
         if ($sourcePartName !== null) {
             $requestedSourcePartName = PartName::normalize($sourcePartName);
-            $sourcePartName = $this->findPartName($requestedSourcePartName);
-            if ($sourcePartName === null || PartName::isRelationshipsPart($sourcePartName)) {
+            if (PartName::isRelationshipsPart($requestedSourcePartName)) {
                 throw new PartNotFoundException(sprintf(
-                    'Relationship source part does not exist: %s',
+                    'Relationship parts cannot own relationships: %s',
                     $requestedSourcePartName,
                 ));
             }
+            // The source part may be added after its relationships; validate()
+            // reports relationship parts whose source never arrives.
+            $sourcePartName = $this->findPartName($requestedSourcePartName) ?? $requestedSourcePartName;
         }
 
         // One live collection per source: separate handles would otherwise
         // overwrite each other's changes when they persist.
-        $cacheKey = $sourcePartName ?? '';
+        $cacheKey = strtolower($sourcePartName ?? '');
         if (isset($this->relationships[$cacheKey])) {
             $relationships = $this->relationships[$cacheKey]->get();
             if ($relationships !== null) {
@@ -458,7 +460,7 @@ final class OpenXmlPackage implements PackageInterface
             unset($this->relationships[$cacheKey]);
         }
 
-        $relationshipEntryName = PartName::entry(PartName::relationshipsName($sourcePartName));
+        $relationshipEntryName = PartName::entry($this->relationshipsPartName($sourcePartName));
         $onChange = fn(Relationships $relationships) => $this->writeRelationships(
             $relationships,
             $sourcePartName,
@@ -797,7 +799,7 @@ final class OpenXmlPackage implements PackageInterface
         Relationships $relationships,
         ?string $sourcePartName,
     ): void {
-        $relationshipPartName = PartName::relationshipsName($sourcePartName);
+        $relationshipPartName = $this->relationshipsPartName($sourcePartName);
         $relationshipEntryName = PartName::entry($relationshipPartName);
 
         if (count($relationships) === 0) {
@@ -961,6 +963,14 @@ final class OpenXmlPackage implements PackageInterface
                 }
             }
         }
+    }
+
+    /** Stored name of an existing relationship part, otherwise the name derived from its source. */
+    private function relationshipsPartName(?string $sourcePartName): string
+    {
+        $derived = PartName::relationshipsName($sourcePartName);
+
+        return $this->findPartName($derived) ?? $derived;
     }
 
     private function findPartName(string $name): ?string

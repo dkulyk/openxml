@@ -11,6 +11,7 @@ use DK\OpenXml\Exception\PackageValidationException;
 use DK\OpenXml\Exception\PartInUseException;
 use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\OpenXmlPackage;
+use DK\OpenXml\Packaging\PartInterface;
 use DK\OpenXml\Packaging\RelationshipType;
 use DK\OpenXml\Security\PackageLimits;
 use PHPUnit\Framework\TestCase;
@@ -607,6 +608,54 @@ final class OpenXmlPackageTest extends TestCase
         self::assertCount(2, OpenXmlPackage::open($this->filename)->getRelationships());
     }
 
+    public function testRelationshipsCanBeAddedBeforeTheirSourcePart(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addRelationship('urn:image', '../media/image.png', sourcePartName: '/ppt/slides/slide1.xml');
+        $package->addPart('/ppt/media/image.png', 'image/png', 'image');
+        $package->addPart('/ppt/slides/slide1.xml', 'application/xml', '<slide/>');
+
+        self::assertSame([], $package->validate());
+        $package->saveAs($this->filename);
+        unset($package);
+
+        $reopened = OpenXmlPackage::open($this->filename);
+        $relationship = $reopened->getPart('/ppt/slides/slide1.xml')->getRelationships()->firstByType('urn:image');
+        self::assertNotNull($relationship);
+        self::assertSame('/ppt/media/image.png', $relationship->getTargetPartName());
+    }
+
+    public function testSourcePartAddedWithDifferentCaseReusesItsRelationshipPart(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addRelationship('urn:first', 'first.xml', sourcePartName: '/slide.xml');
+        $part = $package->addPart('/Slide.xml', 'application/xml', '<slide/>');
+        $part->addRelationship('urn:second', 'second.xml');
+        $package->addPart('/first.xml', 'application/xml', '<first/>');
+        $package->addPart('/second.xml', 'application/xml', '<second/>');
+
+        self::assertCount(2, $part->getRelationships());
+        self::assertSame([], $package->validate());
+        self::assertCount(1, array_filter(
+            iterator_to_array($package->getParts(), false),
+            static fn(PartInterface $candidate): bool => $candidate->getName() === '/Slide.xml',
+        ));
+    }
+
+    public function testRelationshipPartWithoutASourcePartFailsValidation(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addRelationship('urn:image', 'image.png', sourcePartName: '/missing.xml');
+
+        self::assertSame(
+            ['Relationship part "/_rels/missing.xml.rels" belongs to missing source part "/missing.xml".'],
+            $package->validate(),
+        );
+
+        $this->expectException(PackageValidationException::class);
+        $package->saveAs($this->filename);
+    }
+
     public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
     {
         $package = OpenXmlPackage::create();
@@ -639,8 +688,8 @@ final class OpenXmlPackageTest extends TestCase
         $part->addRelationship('urn:missing', 'styles.xml');
         $package->removePart('/word/document.xml');
         self::assertFalse($package->hasPart('/word/document.xml'));
-        $this->expectException(PartNotFoundException::class);
-        $package->getRelationships('/word/document.xml');
+        self::assertCount(0, $package->getRelationships('/word/document.xml'));
+        self::assertSame([], $package->validate());
     }
 
     public function testRemovingReferencedPartIsRejectedWithoutChanges(): void

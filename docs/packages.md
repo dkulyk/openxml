@@ -32,7 +32,10 @@ $styles = $document
 
 Part relationship targets are resolved relative to their source part. External
 relationships retain their URI in `getTarget()` and return `null` from
-`getTargetPart()`.
+`getTargetPart()`. Neither the source part nor an internal target has to exist
+when a relationship is added, so parts and relationships can be registered in
+any order; `validate()` and saving report relationships whose source or target
+part never arrived.
 
 ## Creating a package
 
