@@ -216,10 +216,11 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `save(): void` | Atomically replace the opened source. |
 | `saveAs(string $filename): void` | Atomically write to another path. |
 
-Relationship parts are readable through `getPart()` and the raw read APIs, but
-their contents cannot be replaced through `PartInterface` or the raw write APIs.
-Use `getRelationships()`, `addRelationship()`, and `removeRelationship()` so the
-in-memory relationship collection and its XML representation remain synchronized.
+Relationship parts are readable through `getPart()` and the raw part access
+methods below, but their contents cannot be replaced through `PartInterface` or
+the raw write methods. Use `getRelationships()`, `addRelationship()`, and
+`removeRelationship()` so the in-memory relationship collection and its XML
+representation remain synchronized.
 
 `inspectSignatures()` is structural inspection, not cryptographic verification.
 See [Digital signatures](signatures.md) for its trust boundary and examples.
@@ -227,6 +228,22 @@ See [Digital signatures](signatures.md) for its trust boundary and examples.
 `validate()` reports missing relationship targets, invalid internal targets,
 orphan relationship parts, missing or stale content-type declarations, incorrect
 relationship content types, and unsupported digital-signature preservation.
+
+### Raw part access
+
+`OpenXmlPackage` also exposes name-based access that skips the `PartInterface`
+wrapper. The read methods accept relationship parts; the write methods reject
+them, like `PartInterface` does.
+
+| Method | Description |
+| --- | --- |
+| `readPart(string $name): string` | Materialize and return the complete part. |
+| `openPartStream(string $name): resource` | Open a readable stream that retains its backing ZIP container until the caller closes it. |
+| `getPartReadablePath(string $name): string` | Return a `zip://` URI for an unchanged entry, otherwise a package-owned local path. |
+| `getPartLocalPath(string $name): string` | Return a package-owned local filesystem path, materializing staged contents. |
+| `writePart(string $name, string $contents): void` | Replace an existing part's contents with a string. |
+| `writePartFromStream(string $name, resource $stream): void` | Replace an existing part's contents from the stream's current position to EOF. |
+| `writePartFromPath(string $name, string $path): void` | Replace an existing part's contents with bytes copied from a readable local file. |
 
 ### `PartInterface`
 

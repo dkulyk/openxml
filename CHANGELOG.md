@@ -4,25 +4,39 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-04
+
+### Added
+
+- `getPart()` returns relationship parts, so `/_rels/.rels` and part
+  relationship files can be read through `PartInterface` as well as the raw
+  part access methods.
+- Relationships can be added before their source part exists. `validate()` and
+  saving report relationship parts whose source part never arrived.
+- Benchmark coverage for stream opening, small part reads, part registration,
+  and bulk relationship additions.
+
 ### Changed
 
-- Successful saves reuse the verified temporary package fingerprint after
-  atomic replacement instead of hashing the same output a second time.
-- Part-name availability checks use an indexed exact, ancestor, and descendant
-  lookup instead of scanning every package entry for each added part.
-- Relationship parts can be accessed consistently through both `getPart()`
-  and the raw part-reading APIs.
-- Raw part-writing APIs reject relationship parts, which must be changed through
-  the relationship API to keep the in-memory collection and XML synchronized.
+- **Breaking:** raw part-writing methods and `PartInterface::setContents*()`
+  reject relationship parts. Change relationships through `getRelationships()`,
+  `addRelationship()`, and `removeRelationship()` so the in-memory collection
+  and its XML stay synchronized.
+- **Breaking:** `getRelationships()` and `addRelationship()` no longer throw
+  `PartNotFoundException` for an unknown source part; a mistyped source now
+  surfaces at `validate()` or save time as a missing source part.
+- **Breaking:** `Relationships` and `Relationship` hold their package weakly.
+  Operations that need it, such as `getTargetPart()`, `create()`, and
+  `retarget()`, throw once the package has been released instead of keeping it
+  alive.
 - Relationship parts are serialized once when read or saved instead of after
   every change, changed collections stay live between calls, and generated ids
-  no longer rescan from `rId1` on every addition. `Relationships` and
-  `Relationship` hold their package weakly: operations that need it, such as
-  `getTargetPart()`, `create()`, and `retarget()`, throw once the package has
-  been released instead of keeping it alive.
-- Relationships can be added before their source part exists. `validate()` and
-  saving report relationship parts whose source part never arrived, instead of
-  `getRelationships()` rejecting the source immediately.
+  no longer rescan from `rId1` on every addition. Adding 800 package
+  relationships dropped from about 570 ms to about 2 ms.
+- Part-name availability checks use an indexed exact, ancestor, and descendant
+  lookup instead of scanning every package entry for each added part.
+- Successful saves reuse the verified temporary package fingerprint after
+  atomic replacement instead of hashing the same output a second time.
 
 ### Fixed
 
@@ -165,7 +179,8 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml-package/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/dkulyk/openxml-package/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/dkulyk/openxml-package/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dkulyk/openxml-package/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dkulyk/openxml-package/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dkulyk/openxml-package/compare/v0.3.0...v0.4.0

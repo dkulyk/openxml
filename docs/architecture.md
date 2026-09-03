@@ -12,6 +12,7 @@ DK\OpenXml\OpenXmlPackage
 ├── Signature\SignatureInspection / PackageSignature
 └── Internal
     ├── Container\ContainerInterface / ZipContainer
+    ├── PartNameIndex
     ├── MaterializationPool
     └── SourceFileState
 
