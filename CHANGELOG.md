@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- Successful saves reuse the verified temporary package fingerprint after
+  atomic replacement instead of hashing the same output a second time.
+
 ## [0.6.0] - 2026-09-03
 
 ### Added
