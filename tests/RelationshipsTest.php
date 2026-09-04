@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DK\OpenXml\Tests;
 
 use DK\OpenXml\Exception\OpenXmlException;
+use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PartName;
 use DK\OpenXml\Packaging\Relationship;
 use DK\OpenXml\Packaging\Relationships;
@@ -92,6 +93,38 @@ final class RelationshipsTest extends TestCase
         self::assertCount(2, $copy);
         self::assertSame('word/document.xml', $copy->firstByType('urn:office-document')?->getTarget());
         self::assertTrue($copy->get('rId2')->isExternal());
+    }
+
+    public function testSerializedAttributesAreEscaped(): void
+    {
+        $items = new Relationships();
+        $items->add(new Relationship('rId1', 'urn:t', 'a<b&c"d'));
+        $items->add(new Relationship('rId2', 'urn:t', 'https://example.com/?a=1&b=2', true));
+        $xml = $items->toXml();
+
+        self::assertStringContainsString('Target="a&lt;b&amp;c&quot;d"', $xml);
+        self::assertStringContainsString('Target="https://example.com/?a=1&amp;b=2" TargetMode="External"', $xml);
+
+        $copy = Relationships::fromXml($xml);
+        self::assertSame('a<b&c"d', $copy->get('rId1')->getTarget());
+        self::assertSame('https://example.com/?a=1&b=2', $copy->get('rId2')->getTarget());
+    }
+
+    public function testEmptyCollectionSerializesToAnEmptyRoot(): void
+    {
+        self::assertCount(0, Relationships::fromXml((new Relationships())->toXml()));
+    }
+
+    public function testContentTypesAreSortedInTheXmlWithoutReorderingTheirOwner(): void
+    {
+        $types = new ContentTypes();
+        $types->setOverride('/zeta.xml', 'app/z+xml');
+        $types->setOverride('/alpha.xml', 'app/a+xml');
+        $xml = $types->toXml();
+
+        self::assertLessThan(strpos($xml, '/zeta.xml'), strpos($xml, '/alpha.xml'));
+        // Serializing is a read: it used to sort the collection's own arrays.
+        self::assertSame(['/zeta.xml', '/alpha.xml'], array_keys($types->getOverrides()));
     }
 
     public function testGeneratedIdsFillFirstGap(): void

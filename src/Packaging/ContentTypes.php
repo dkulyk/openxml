@@ -115,27 +115,28 @@ final class ContentTypes
 
     public function toXml(): string
     {
-        $document = new \DOMDocument('1.0', 'UTF-8');
-        $document->formatOutput = true;
-        $root = $document->createElementNS(self::XML_NAMESPACE, 'Types');
-        $document->appendChild($root);
+        // Sorted copies: serializing a package must not reorder its own state.
+        $defaults = $this->defaults;
+        $overrides = $this->overrides;
+        ksort($defaults);
+        ksort($overrides);
 
-        ksort($this->defaults);
-        ksort($this->overrides);
-
-        foreach ($this->defaults as $extension => $type) {
-            $node = $document->createElementNS(self::XML_NAMESPACE, 'Default');
-            $node->setAttribute('Extension', $extension);
-            $node->setAttribute('ContentType', $type);
-            $root->appendChild($node);
+        $body = '';
+        foreach ($defaults as $extension => $type) {
+            $body .= sprintf(
+                "  <Default Extension=\"%s\" ContentType=\"%s\"/>\n",
+                XmlDocument::attributeValue($extension, 'Extension'),
+                XmlDocument::attributeValue($type, 'ContentType'),
+            );
         }
-        foreach ($this->overrides as $name => $type) {
-            $node = $document->createElementNS(self::XML_NAMESPACE, 'Override');
-            $node->setAttribute('PartName', $name);
-            $node->setAttribute('ContentType', $type);
-            $root->appendChild($node);
+        foreach ($overrides as $name => $type) {
+            $body .= sprintf(
+                "  <Override PartName=\"%s\" ContentType=\"%s\"/>\n",
+                XmlDocument::attributeValue($name, 'PartName'),
+                XmlDocument::attributeValue($type, 'ContentType'),
+            );
         }
 
-        return (string) $document->saveXML();
+        return XmlDocument::serialize('Types', self::XML_NAMESPACE, $body);
     }
 }

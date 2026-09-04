@@ -13,6 +13,34 @@ final class XmlDocument
 
     private function __construct() {}
 
+    /**
+     * Escape a value for an XML attribute, matching what DOM produces: `&`, `<`, `>`
+     * and `"` become entities and `'` is left alone.
+     */
+    public static function attributeValue(string $value, string $attributeName): string
+    {
+        $escaped = htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+        if ($escaped === '' && $value !== '') {
+            throw new OpenXmlException(sprintf('The %s attribute is not valid UTF-8.', $attributeName));
+        }
+
+        return $escaped;
+    }
+
+    /** Wrap serialized children in a root element, matching DOM's formatted output. */
+    public static function serialize(string $rootName, string $namespace, string $body): string
+    {
+        $header = sprintf(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<%s xmlns=\"%s\"",
+            $rootName,
+            self::attributeValue($namespace, 'xmlns'),
+        );
+
+        return $body === ''
+            ? $header . "/>\n"
+            : $header . ">\n" . $body . '</' . $rootName . ">\n";
+    }
+
     public static function load(
         string $xml,
         string $expectedRootName,

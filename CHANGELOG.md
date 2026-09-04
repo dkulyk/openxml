@@ -6,10 +6,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- `[Content_Types].xml` and relationship parts are serialized as strings rather
+  than through DOM. The output is byte for byte what it was, escaping included.
 - Reads go straight to their source: an unchanged entry is read from the archive
   rather than through a stream and its wrapper objects, and a staged part is read
   where it already is instead of being copied first.
-
 - Relationship collections are held for the package's lifetime instead of only
   while something else keeps them alive. Every whole-package operation walks all
   relationships, and each walk re-parsed every `.rels` part. The package keeps
@@ -23,6 +24,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- `ContentTypes::toXml()` no longer sorts the collection's own arrays as a side
+  effect of serializing it.
 - A package containing an entry that the content types do not cover no longer
   becomes unusable. `getParts()` skipped nothing and threw, which also stopped
   `getInboundRelationships()`, `removePart()`, `removePartAndRelationships()`
