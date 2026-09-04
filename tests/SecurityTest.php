@@ -7,6 +7,9 @@ namespace DK\OpenXml\Tests;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Exception\PackageValidationException;
+use DK\OpenXml\Exception\UnsupportedFileFormatException;
+use DK\OpenXml\OfficeFileDetector;
+use DK\OpenXml\OfficeFileFormat;
 use DK\OpenXml\OpenXmlPackage;
 use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PartName;
@@ -117,6 +120,30 @@ final class SecurityTest extends TestCase
             static fn($part) => $part->getName(),
             iterator_to_array($package->getParts(), false),
         ));
+    }
+
+    public function testZipArchiveWithoutContentTypesIsNotAnOpcPackage(): void
+    {
+        $this->writeZip(['readme.txt' => 'not a package']);
+
+        self::assertSame(OfficeFileFormat::Unknown, OfficeFileDetector::detect($this->filename));
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        OpenXmlPackage::open($this->filename);
+    }
+
+    public function testOpenDocumentArchiveIsNotAnOpcPackage(): void
+    {
+        $this->writeZip([
+            'mimetype' => 'application/vnd.oasis.opendocument.presentation',
+            'META-INF/manifest.xml' => '<manifest:manifest/>',
+            'content.xml' => '<office:document-content/>',
+        ]);
+
+        self::assertSame(OfficeFileFormat::Unknown, OfficeFileDetector::detect($this->filename));
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        OpenXmlPackage::open($this->filename);
     }
 
     public function testUnsafeZipEntryNameIsRejected(): void

@@ -77,11 +77,18 @@ final class OpenXmlPackage implements PackageInterface
         return new self($container, $contentTypes, limits: $limits);
     }
 
-    public static function open(string $filename, ?PackageLimits $limits = null): self
-    {
+    /**
+     * @param null|list<string>|string $expecting Content type, or types, the main document part must have.
+     */
+    public static function open(
+        string $filename,
+        ?PackageLimits $limits = null,
+        string|array|null $expecting = null,
+    ): self {
         $limits ??= new PackageLimits();
         $sourceFilename = self::resolveExistingFilename($filename);
-        $format = OfficeFileDetector::detect($sourceFilename);
+        // The container check below is authoritative for OPC, so the archive is opened once.
+        $format = OfficeFileDetector::detectContainer($sourceFilename);
 
         if ($format === OfficeFileFormat::EncryptedOpcPackage) {
             throw new EncryptedPackageException(
@@ -103,16 +110,25 @@ final class OpenXmlPackage implements PackageInterface
 
         $sourceState = SourceFileState::capture($sourceFilename);
         $container = ZipContainer::open($sourceFilename, $limits, $sourceState);
-        self::assertPartNameIntegrity($container);
 
         if (!$container->has('[Content_Types].xml')) {
-            throw new OpenXmlException('Package has no [Content_Types].xml.');
+            throw new UnsupportedFileFormatException(
+                'This is a ZIP archive without [Content_Types].xml, so it is not an OPC package.',
+            );
         }
 
         $contentTypes = ContentTypes::fromXml(
             $container->read('[Content_Types].xml'),
             $limits->maximumXmlBytes,
         );
+
+        // Checked before the passes over every entry below, so a package of the wrong
+        // kind is rejected without validating its names or indexing them.
+        if ($expecting !== null) {
+            self::assertMainDocumentType($container, $contentTypes, $limits, (array) $expecting);
+        }
+
+        self::assertPartNameIntegrity($container);
         $sourceState->assertUnchanged();
 
         return new self(
@@ -508,6 +524,103 @@ final class OpenXmlPackage implements PackageInterface
     public function removeRelationship(string $id, ?string $sourcePartName = null): void
     {
         $this->getRelationships($sourcePartName)->remove($id);
+    }
+
+    public function getMainDocumentPart(): ?PartInterface
+    {
+        $partName = self::mainDocumentPartName($this->getRelationships());
+
+        return $partName !== null && $this->hasPart($partName) ? $this->getPart($partName) : null;
+    }
+
+    /**
+     * Exact entry lookup first, so the common case stays a hash hit; the scan behind it
+     * only runs for a target whose case differs from the stored entry, or for one that
+     * is not in the archive at all and is about to be rejected anyway.
+     */
+    private static function containsPart(ContainerInterface $container, string $partName): bool
+    {
+        $entryName = PartName::entry($partName);
+        if ($container->has($entryName)) {
+            return true;
+        }
+
+        // Compared by ASCII case, the OPC equivalence rule, rather than by normalizing
+        // entry names: they are only validated after this check runs.
+        $comparisonKey = strtolower($entryName);
+        foreach ($container->entries() as $candidate) {
+            if (strtolower($candidate) === $comparisonKey) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function mainDocumentPartName(Relationships $relationships): ?string
+    {
+        $relationship = $relationships->firstByType(RelationshipType::OFFICE_DOCUMENT);
+
+        return $relationship === null || $relationship->isExternal()
+            ? null
+            : $relationship->getTargetPartName();
+    }
+
+    /**
+     * Reads the package relationships straight from the container: the check runs before
+     * the package exists, so that a rejected file never pays for its part-name index.
+     *
+     * @param list<string> $expected
+     */
+    private static function assertMainDocumentType(
+        ContainerInterface $container,
+        ContentTypes $contentTypes,
+        PackageLimits $limits,
+        array $expected,
+    ): void {
+        $entryName = PartName::entry(PartName::relationshipsName());
+        $partName = $container->has($entryName)
+            ? self::mainDocumentPartName(Relationships::fromXml(
+                $container->read($entryName),
+                maximumXmlBytes: $limits->maximumXmlBytes,
+            ))
+            : null;
+
+        if ($partName === null) {
+            throw new UnsupportedFileFormatException(sprintf(
+                'The package declares no main document part; expected one of: %s.',
+                implode(', ', $expected),
+            ));
+        }
+        if (!self::containsPart($container, $partName)) {
+            throw new UnsupportedFileFormatException(sprintf(
+                'The main document part "%s" is missing from the package; expected one of: %s.',
+                $partName,
+                implode(', ', $expected),
+            ));
+        }
+
+        $contentType = $contentTypes->getForPart($partName);
+        if ($contentType === null) {
+            throw new UnsupportedFileFormatException(sprintf(
+                'The main document part "%s" has no declared content type; expected one of: %s.',
+                $partName,
+                implode(', ', $expected),
+            ));
+        }
+
+        foreach ($expected as $expectedContentType) {
+            if (strcasecmp($contentType, $expectedContentType) === 0) {
+                return;
+            }
+        }
+
+        throw new UnsupportedFileFormatException(sprintf(
+            'The main document part "%s" is "%s"; expected one of: %s.',
+            $partName,
+            $contentType,
+            implode(', ', $expected),
+        ));
     }
 
     public function inspectSignatures(): SignatureInspection

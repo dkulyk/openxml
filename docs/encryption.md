@@ -76,7 +76,7 @@ The library does not support:
 
 | API | Description |
 | --- | --- |
-| `OfficeFileDetector::detect(string $filename): OfficeFileFormat` | Identify OPC ZIP, CFBF, encrypted OPC, or unknown input. |
+| `OfficeFileDetector::detect(string $filename): OfficeFileFormat` | Identify OPC ZIP, CFBF, encrypted OPC, or unknown input. A ZIP without `[Content_Types].xml` reports `Unknown`. |
 | `EncryptedOfficeFile::encrypt(...)` | Write Agile AES-256/SHA-512 encryption. |
 | `EncryptedOfficeFile::decrypt(...)` | Atomically decrypt Agile or Standard Encryption into a validated OPC package. |
 | `AgileEncryptionOptions` | Configure the password hash work factor for new files. |
