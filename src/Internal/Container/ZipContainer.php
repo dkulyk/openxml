@@ -30,6 +30,9 @@ final class ZipContainer implements ContainerInterface
     /** @var array<string, string> Destination entry names mapped to their source ZIP entry. */
     private array $moved = [];
 
+    /** @var array<string, true> Staged entries written without deflate. */
+    private array $stored = [];
+
     private ?\ZipArchive $sourceArchive = null;
 
     private int $openSourceStreams = 0;
@@ -213,13 +216,14 @@ final class ZipContainer implements ContainerInterface
         }
     }
 
-    public function write(string $name, string $contents): void
+    public function write(string $name, string $contents, bool $compress = true): void
     {
         self::assertSafeEntryName($name);
         $this->assertWriteWithinLimits($name, strlen($contents));
         $this->closeStagedResource($name);
         $this->staged[$name] = $contents;
         $this->setEntry($name, strlen($contents));
+        $this->setCompression($name, $compress);
         unset($this->moved[$name]);
     }
 
@@ -236,10 +240,11 @@ final class ZipContainer implements ContainerInterface
         $this->closeStagedResource($name);
         $this->staged[$name] = $contents;
         $this->setEntry($name, 0);
+        $this->setCompression($name, true);
         unset($this->moved[$name]);
     }
 
-    public function writeStream(string $name, $stream): void
+    public function writeStream(string $name, $stream, bool $compress = true): void
     {
         if (!is_resource($stream) || get_resource_type($stream) !== 'stream') {
             throw new \InvalidArgumentException('Part contents must be a readable stream resource.');
@@ -280,6 +285,7 @@ final class ZipContainer implements ContainerInterface
             $this->closeStagedResource($name);
             $this->staged[$name] = $staged;
             $this->setEntry($name, $bytes);
+            $this->setCompression($name, $compress);
             unset($this->moved[$name]);
         } catch (\Throwable $exception) {
             fclose($staged);
@@ -291,8 +297,7 @@ final class ZipContainer implements ContainerInterface
     public function remove(string $name): void
     {
         $this->closeStagedResource($name);
-        unset($this->staged[$name]);
-        unset($this->moved[$name]);
+        unset($this->staged[$name], $this->stored[$name], $this->moved[$name]);
         if ($this->has($name)) {
             $this->liveBytes -= $this->entries[$name];
             --$this->liveEntryCount;
@@ -371,6 +376,9 @@ final class ZipContainer implements ContainerInterface
                 if (!$written) {
                     throw new OpenXmlException(sprintf('Unable to write ZIP entry "%s".', $entryName));
                 }
+                if (isset($this->stored[$entryName]) && !$archive->setCompressionName($entryName, \ZipArchive::CM_STORE)) {
+                    throw new OpenXmlException(sprintf('Unable to store ZIP entry "%s" uncompressed.', $entryName));
+                }
             }
         } catch (\Throwable $exception) {
             $archive->close();
@@ -431,6 +439,15 @@ final class ZipContainer implements ContainerInterface
                 'Package exceeds the configured maximum of %d entries.',
                 $this->limits->maximumEntries,
             ));
+        }
+    }
+
+    private function setCompression(string $name, bool $compress): void
+    {
+        if ($compress) {
+            unset($this->stored[$name]);
+        } else {
+            $this->stored[$name] = true;
         }
     }
 

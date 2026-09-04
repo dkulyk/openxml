@@ -210,7 +210,7 @@ final class OpenXmlPackage implements PackageInterface
         }
         $this->assertPartNameAvailable($name, true);
 
-        $this->container()->write(PartName::entry($name), $contents);
+        $this->container()->write(PartName::entry($name), $contents, self::compresses($contentType));
         $this->registerContentType($name, $contentType);
         $this->partNames->add($name);
         ++$this->contentRevision;
@@ -227,7 +227,7 @@ final class OpenXmlPackage implements PackageInterface
         }
         $this->assertPartNameAvailable($name, true);
 
-        $this->container()->writeStream(PartName::entry($name), $stream);
+        $this->container()->writeStream(PartName::entry($name), $stream, self::compresses($contentType));
         $this->registerContentType($name, $contentType);
         $this->partNames->add($name);
         ++$this->contentRevision;
@@ -294,7 +294,7 @@ final class OpenXmlPackage implements PackageInterface
     {
         $name = $this->existingWritablePartName($name);
 
-        $this->container()->write(PartName::entry($name), $contents);
+        $this->container()->write(PartName::entry($name), $contents, $this->partCompresses($name));
         ++$this->contentRevision;
         $this->changed = true;
     }
@@ -304,7 +304,7 @@ final class OpenXmlPackage implements PackageInterface
     {
         $name = $this->existingWritablePartName($name);
 
-        $this->container()->writeStream(PartName::entry($name), $stream);
+        $this->container()->writeStream(PartName::entry($name), $stream, $this->partCompresses($name));
         ++$this->contentRevision;
         $this->changed = true;
     }
@@ -1118,6 +1118,53 @@ final class OpenXmlPackage implements PackageInterface
     }
 
     /** Write an override only when no default already yields the same type. */
+    private function partCompresses(string $partName): bool
+    {
+        return self::compresses($this->contentTypes->getForPart($partName));
+    }
+
+    /** @var array<string, true> Content types whose payload is already a compressed stream. */
+    private const STORED_CONTENT_TYPES = [
+        'image/png' => true,
+        'image/jpeg' => true,
+        'image/gif' => true,
+        'image/webp' => true,
+        'image/heic' => true,
+        'image/heif' => true,
+        'image/avif' => true,
+        'image/jp2' => true,
+        'audio/mpeg' => true,
+        'audio/mp4' => true,
+        'audio/ogg' => true,
+        'audio/webm' => true,
+        'application/zip' => true,
+        'application/gzip' => true,
+        'application/x-zip-compressed' => true,
+    ];
+
+    /**
+     * Whether deflate is worth spending on a part of this content type.
+     *
+     * The list is positive: a type is only excluded when its payload is already a
+     * compressed stream, so that anything unrecognised, and compressible formats
+     * that look like media (SVG, BMP, EMF, WMF), keep being deflated.
+     */
+    private static function compresses(?string $contentType): bool
+    {
+        if ($contentType === null) {
+            return true;
+        }
+
+        $parameters = strpos($contentType, ';');
+        $type = strtolower(trim($parameters === false ? $contentType : substr($contentType, 0, $parameters)));
+
+        return !isset(self::STORED_CONTENT_TYPES[$type])
+            && !str_starts_with($type, 'video/')
+            // An embedded workbook, presentation, or document is itself a ZIP.
+            && !str_starts_with($type, 'application/vnd.openxmlformats-officedocument.')
+            && !str_starts_with($type, 'application/vnd.oasis.opendocument.');
+    }
+
     private function registerContentType(string $name, string $contentType): void
     {
         $this->contentTypes->removeOverride($name);

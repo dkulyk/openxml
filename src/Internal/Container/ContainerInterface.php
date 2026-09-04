@@ -20,7 +20,8 @@ interface ContainerInterface
     /** @return iterable<string> */
     public function entries(): iterable;
 
-    public function write(string $name, string $contents): void;
+    /** $compress is a hint: contents that cannot shrink are stored rather than deflated. */
+    public function write(string $name, string $contents, bool $compress = true): void;
 
     /**
      * Stage contents produced on first read or save. The producer is invoked at
@@ -31,7 +32,7 @@ interface ContainerInterface
     public function writeLazy(string $name, \Closure $contents): void;
 
     /** @param resource $stream */
-    public function writeStream(string $name, $stream): void;
+    public function writeStream(string $name, $stream, bool $compress = true): void;
 
     public function remove(string $name): void;
 
