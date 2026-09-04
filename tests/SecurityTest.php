@@ -244,6 +244,125 @@ final class SecurityTest extends TestCase
         $package->saveAs($this->filename);
     }
 
+    public function testEntryThatInflatesBeyondItsDeclaredSizeIsRejected(): void
+    {
+        $limits = new PackageLimits(maximumPartBytes: 1048576, maximumCompressionRatio: 50.0);
+        // The directory entry claims 100 bytes, so the limits accepted at open() are
+        // checked against a size the entry does not honour.
+        $this->writeLyingZip('big.bin', str_repeat("\0", 8 * 1048576), declaredBytes: 100);
+        $package = OpenXmlPackage::open($this->filename, $limits);
+
+        $this->expectException(PackageLimitException::class);
+        $this->expectExceptionMessage('expands beyond the 100 bytes its ZIP directory declares');
+        $package->getPart('/big.bin')->getContents();
+    }
+
+    public function testStreamOfAnEntryThatInflatesBeyondItsDeclaredSizeIsRejected(): void
+    {
+        $limits = new PackageLimits(maximumPartBytes: 1048576, maximumCompressionRatio: 50.0);
+        $this->writeLyingZip('big.bin', str_repeat("\0", 8 * 1048576), declaredBytes: 100);
+        $package = OpenXmlPackage::open($this->filename, $limits);
+        $stream = $package->getPart('/big.bin')->openStream();
+
+        try {
+            $this->expectException(PackageLimitException::class);
+            $this->expectExceptionMessage('expands beyond the 100 bytes its ZIP directory declares');
+            stream_get_contents($stream);
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testMaterializingAnEntryThatInflatesBeyondItsDeclaredSizeIsRejected(): void
+    {
+        $limits = new PackageLimits(maximumPartBytes: 1048576, maximumCompressionRatio: 50.0);
+        $this->writeLyingZip('big.bin', str_repeat("\0", 8 * 1048576), declaredBytes: 100);
+        $package = OpenXmlPackage::open($this->filename, $limits);
+
+        $this->expectException(PackageLimitException::class);
+        $this->expectExceptionMessage('expands beyond the 100 bytes its ZIP directory declares');
+        $package->getPart('/big.bin')->getLocalPath();
+    }
+
+    public function testRelationshipPartThatInflatesBeyondItsDeclaredSizeIsRejected(): void
+    {
+        // The library parses this one itself, so the bound has to hold before the XML
+        // limit ever sees the content.
+        $rels = '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="urn:document" Target="big.bin"/>'
+            . str_repeat(' ', 3 * 1048576) . '</Relationships>';
+        $limits = new PackageLimits(maximumPartBytes: 4194304, maximumCompressionRatio: 50.0, maximumXmlBytes: 1048576);
+        $this->writeLyingZip('_rels/.rels', $rels, declaredBytes: 200);
+        $package = OpenXmlPackage::open($this->filename, $limits);
+
+        $this->expectException(PackageLimitException::class);
+        $this->expectExceptionMessage('expands beyond the 200 bytes its ZIP directory declares');
+        $package->getRelationships();
+    }
+
+    public function testHonestEntryIsReadInFull(): void
+    {
+        $contents = str_repeat('a', 100000);
+        $this->writeLyingZip('big.bin', $contents, declaredBytes: strlen($contents));
+        $package = OpenXmlPackage::open($this->filename);
+
+        self::assertSame($contents, $package->getPart('/big.bin')->getContents());
+    }
+
+    /**
+     * Write a ZIP whose directory declares $declaredBytes for the entry, which ZipArchive
+     * cannot be made to do.
+     */
+    private function writeLyingZip(string $name, string $contents, int $declaredBytes): void
+    {
+        $types = '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            . '<Default Extension="xml" ContentType="application/xml"/>'
+            . '<Default Extension="bin" ContentType="application/octet-stream"/></Types>';
+
+        $body = '';
+        $directory = '';
+        foreach ([['[Content_Types].xml', $types, strlen($types)], [$name, $contents, $declaredBytes]] as [$entryName, $data, $size]) {
+            $compressed = gzdeflate($data, 9);
+            self::assertNotFalse($compressed);
+            $crc = crc32($data);
+            $directory .= "PK\x01\x02" . pack(
+                'vvvvvvVVVvvvvvVV',
+                20,
+                20,
+                0,
+                8,
+                0,
+                0,
+                $crc,
+                strlen($compressed),
+                $size,
+                strlen($entryName),
+                0,
+                0,
+                0,
+                0,
+                0,
+                strlen($body),
+            ) . $entryName;
+            $body .= "PK\x03\x04" . pack(
+                'vvvvvVVVvv',
+                20,
+                0,
+                8,
+                0,
+                0,
+                $crc,
+                strlen($compressed),
+                $size,
+                strlen($entryName),
+                0,
+            ) . $entryName . $compressed;
+        }
+
+        $end = "PK\x05\x06" . pack('vvvvVVv', 0, 0, 2, 2, strlen($directory), strlen($body), 0);
+        self::assertNotFalse(file_put_contents($this->filename, $body . $directory . $end));
+    }
+
     /** @param array<string, string> $entries */
     private function writeZip(array $entries): void
     {

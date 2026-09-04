@@ -17,7 +17,12 @@ interface PartInterface
     /** @return resource A readable stream that keeps its backing storage alive until closed. */
     public function openStream();
 
-    /** Return a PHP-readable ZIP URI or a package-owned local path valid for the package lifetime. */
+    /**
+     * Return a PHP-readable ZIP URI or a package-owned local path valid for the package lifetime.
+     *
+     * A consumer reading the ZIP URI reads it directly, so the size the archive
+     * declares for the part does not bound it; getLocalPath() does.
+     */
     public function getReadablePath(): string;
 
     /** Return a package-owned local filesystem path valid for the package lifetime. */
