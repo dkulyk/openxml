@@ -129,12 +129,19 @@ final class ZipContainer implements ContainerInterface
 
     public function read(string $name): string
     {
-        $stream = $this->openStream($name);
+        $stream = $this->entryStream($name);
+        $declaredBytes = $this->entries[$name];
 
         try {
-            $contents = stream_get_contents($stream);
+            // Bounded by hand rather than through the filter openStream() attaches:
+            // this is the hot path, and one length check costs less than a callback
+            // per buffer.
+            $contents = stream_get_contents($stream, $declaredBytes + 1);
             if ($contents === false) {
                 throw new OpenXmlException(sprintf('Unable to read ZIP entry "%s".', $name));
+            }
+            if (strlen($contents) > $declaredBytes) {
+                throw DeclaredSizeFilter::exceeded($name, $declaredBytes);
             }
 
             return $contents;
@@ -144,6 +151,19 @@ final class ZipContainer implements ContainerInterface
     }
 
     public function openStream(string $name)
+    {
+        $stream = $this->entryStream($name);
+        if (!isset($this->staged[$name])) {
+            // Staged content is this container's own, and its recorded size is what was
+            // written; only what the source archive declares is worth distrusting.
+            DeclaredSizeFilter::attach($stream, $name, $this->entries[$name]);
+        }
+
+        return $stream;
+    }
+
+    /** @return resource */
+    private function entryStream(string $name)
     {
         if (!$this->has($name)) {
             throw new OpenXmlException(sprintf('ZIP entry "%s" does not exist.', $name));

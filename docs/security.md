@@ -27,6 +27,12 @@ ratios, DTDs, malformed content-type and relationship XML, and data beyond the
 configured limits. It also rejects case-equivalent part names, names derivable
 from another part name, and percent-encoded aliases before part contents are read.
 
+Limits are checked against what the ZIP directory declares. An entry that
+inflates past its declared size is stopped while it is being read, so a lying
+directory buys an attacker one buffer rather than the whole expansion. A
+copy-through save carries such an entry to the output unchanged; nothing
+expands, and reading it from the output fails the same way.
+
 `getLocalPath()` and the local fallback of `getReadablePath()` create private
 temporary files containing the uncompressed part bytes. They use a private
 directory and are removed when the owning package is released. Applications must
