@@ -10,6 +10,9 @@ final class PartName
 {
     private function __construct() {}
 
+    /** Names a package presents at once: parts plus their relationship parts, with room for a large deck. */
+    private const CACHE_LIMIT = 65536;
+
     /** @var array<string, true> */
     private static array $validated = [];
 
@@ -35,10 +38,13 @@ final class PartName
         }
         // Names repeat dozens of times per part during a build and save; the
         // cache is bounded in count and entry length so long-lived workers do
-        // not accumulate every name a package ever presented.
+        // not accumulate every name a package ever presented. The bound is
+        // above the name count of a large package, and eviction drops the
+        // older half rather than the whole cache: clearing it made every pass
+        // over a package larger than the bound miss on every name.
         if (strlen($name) <= 255) {
-            if (count(self::$validated) >= 4096) {
-                self::$validated = [];
+            if (count(self::$validated) >= self::CACHE_LIMIT) {
+                self::$validated = array_slice(self::$validated, intdiv(self::CACHE_LIMIT, 2), null, true);
             }
             self::$validated[$name] = true;
         }

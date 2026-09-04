@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file. The format 
   and `movePart()`, so the package could be opened and validated but never
   repaired. `getParts()` now skips such an entry, `validate()` still reports it,
   and `setDefaultContentType()` makes it a part.
+- `PartName::normalize()` no longer clears its whole validation cache when it
+  fills up. A package with more part names than the cache bound made every pass
+  over it miss on every name; the bound is now above the name count of a large
+  package and eviction drops the older half.
 
 ## [0.8.1] - 2026-09-04
 

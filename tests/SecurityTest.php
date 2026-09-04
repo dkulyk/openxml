@@ -197,6 +197,29 @@ final class SecurityTest extends TestCase
         PartName::normalize('/word/document.xml/');
     }
 
+    public function testValidationStaysCorrectPastTheMemoisationBound(): void
+    {
+        // Read the bound rather than restating it, so the test keeps exercising
+        // eviction if the bound moves.
+        $bound = (new \ReflectionClassConstant(PartName::class, 'CACHE_LIMIT'))->getValue();
+        self::assertIsInt($bound);
+        $names = $bound + 1;
+        for ($index = 0; $index < $names; ++$index) {
+            PartName::normalize('/word/media/image' . $index . '.png');
+        }
+
+        // The first name has been evicted by now and the last one is still cached.
+        self::assertSame('/word/media/image0.png', PartName::normalize('/word/media/image0.png'));
+        self::assertSame(
+            '/word/media/image' . ($names - 1) . '.png',
+            PartName::normalize('/word/media/image' . ($names - 1) . '.png'),
+        );
+
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Invalid OPC part name');
+        PartName::normalize('/word/media/image0.png/');
+    }
+
     public function testSuspiciousCompressionRatioIsRejectedBeforeExtraction(): void
     {
         $this->writeZip(['large.txt' => str_repeat('A', 100_000)]);
