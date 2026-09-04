@@ -1241,6 +1241,51 @@ final class OpenXmlPackageTest extends TestCase
         OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
     }
 
+    public function testPackageWithAnEntryLackingAContentTypeStaysUsable(): void
+    {
+        $this->writeRawZip([
+            '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                . '<Default Extension="xml" ContentType="application/xml"/>'
+                . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>',
+            '_rels/.rels' => '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                . '<Relationship Id="rId1" Type="urn:document" Target="word/document.xml"/></Relationships>',
+            'word/document.xml' => '<document/>',
+            // No Default for jpeg, so this entry has no content type at all.
+            'docProps/thumbnail.jpeg' => 'binary',
+        ]);
+        $package = OpenXmlPackage::open($this->filename);
+
+        $names = [];
+        foreach ($package->getParts() as $part) {
+            $names[] = $part->getName();
+        }
+
+        self::assertSame(['/word/document.xml'], $names);
+        self::assertCount(1, $package->getInboundRelationships('/word/document.xml'));
+        self::assertSame('binary', $package->readPart('/docProps/thumbnail.jpeg'));
+
+        $issues = $package->validate();
+        self::assertNotSame([], array_filter(
+            $issues,
+            static fn(string $issue): bool => str_contains($issue, 'thumbnail.jpeg'),
+        ));
+    }
+
+    public function testAPartLackingAContentTypeCanBeGivenOneAndThenUsed(): void
+    {
+        $this->writeRawZip([
+            '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                . '<Default Extension="xml" ContentType="application/xml"/></Types>',
+            'word/document.xml' => '<document/>',
+            'docProps/thumbnail.jpeg' => 'binary',
+        ]);
+        $package = OpenXmlPackage::open($this->filename);
+        $package->setDefaultContentType('jpeg', 'image/jpeg');
+
+        self::assertSame('image/jpeg', $package->getPart('/docProps/thumbnail.jpeg')->getContentType());
+        self::assertSame([], $package->validate());
+    }
+
     /** @param array<string, string> $entries */
     private function writeRawZip(array $entries): void
     {
