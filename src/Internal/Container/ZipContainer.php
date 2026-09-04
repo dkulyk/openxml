@@ -129,27 +129,59 @@ final class ZipContainer implements ContainerInterface
 
     public function read(string $name): string
     {
-        $stream = $this->entryStream($name);
-        // After entryStream(), not before: a lazily staged entry is recorded with a
-        // size of 0 until producing it sets the real one.
-        $declaredBytes = $this->entries[$name];
+        if (!$this->has($name)) {
+            throw new OpenXmlException(sprintf('ZIP entry "%s" does not exist.', $name));
+        }
+        if (!isset($this->staged[$name])) {
+            return $this->readSourceEntry($name);
+        }
+
+        // Staged contents are this container's own, so they are read where they
+        // already are rather than copied into a stream first.
+        $staged = $this->resolveStaged($name);
+        if (is_string($staged)) {
+            return $staged;
+        }
+
+        $position = ftell($staged);
+        if ($position === false || fseek($staged, 0) !== 0) {
+            throw new OpenXmlException(sprintf('Unable to rewind streamed contents for part "%s".', $name));
+        }
 
         try {
-            // Bounded by hand rather than through the filter openStream() attaches:
-            // this is the hot path, and one length check costs less than a callback
-            // per buffer.
-            $contents = stream_get_contents($stream, $declaredBytes + 1);
+            $contents = stream_get_contents($staged);
             if ($contents === false) {
                 throw new OpenXmlException(sprintf('Unable to read ZIP entry "%s".', $name));
-            }
-            if (strlen($contents) > $declaredBytes) {
-                throw DeclaredSizeFilter::exceeded($name, $declaredBytes);
             }
 
             return $contents;
         } finally {
-            fclose($stream);
+            fseek($staged, $position);
         }
+    }
+
+    /**
+     * Read an unchanged entry straight out of the source archive: libzip does the same
+     * work getStream() would, without a stream wrapper and its owner object. The length
+     * bounds a directory that understates the entry, as the stream filter does.
+     */
+    private function readSourceEntry(string $name): string
+    {
+        if ($this->sourceFilename === null) {
+            throw new OpenXmlException(sprintf('ZIP entry "%s" has no content source.', $name));
+        }
+        $this->assertSourceUnchanged();
+
+        $declaredBytes = $this->entries[$name];
+        $contents = $this->sourceArchive()->getFromName($this->moved[$name] ?? $name, $declaredBytes + 1);
+        if ($contents === false) {
+            throw new OpenXmlException(sprintf('Unable to read ZIP entry "%s".', $name));
+        }
+        if (strlen($contents) > $declaredBytes) {
+            throw DeclaredSizeFilter::exceeded($name, $declaredBytes);
+        }
+
+        return $contents;
     }
 
     public function openStream(string $name)
