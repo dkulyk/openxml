@@ -110,10 +110,14 @@ and the caller may close it as soon as the method returns.
 
 A part whose content type names an already-compressed payload — JPEG, PNG, GIF,
 WebP, HEIC, HEIF, AVIF, JP2, MP3, MP4, Ogg or WebM audio, any `video/*`, ZIP,
-gzip, or an embedded OPC or OpenDocument file — is stored in the package rather
-than deflated a second time, which is the same size for far less work. Types
-that do compress, including SVG, BMP, EMF and WMF, and any type the library does
-not recognise, are deflated.
+gzip, or an embedded OPC or OpenDocument document — is stored in the package
+rather than deflated a second time, which is the same size for far less work.
+The content type has to match one of those exactly. A whole family is never
+excluded, because an embedded document and the XML parts of the package share
+their type prefix: the deck is `…presentationml.presentation` and a slide is
+`…presentationml.slide+xml`. Types that do compress, including SVG, BMP, EMF,
+WMF, VML drawings and OLE objects, and any type the library does not recognise,
+are deflated.
 
 ```php
 $contents = $part->openStream();

@@ -1406,6 +1406,35 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame($contents, $reopened->readPart('/word/media/image1.jpeg'));
     }
 
+    public function testOoxmlPartsAreDeflatedAndOnlyTheEmbeddedDocumentIsStored(): void
+    {
+        $package = OpenXmlPackage::create();
+        $contents = str_repeat('a', 4096);
+        // Every one of these shares the "…officedocument.presentationml." prefix
+        // with the embedded deck, and only the deck is itself a ZIP.
+        $package->addPart('/ppt/presentation.xml', 'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml', $contents);
+        $package->addPart('/ppt/slides/slide1.xml', 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml', $contents);
+        $package->addPart('/ppt/drawings/vmlDrawing1.vml', 'application/vnd.openxmlformats-officedocument.vmlDrawing', $contents);
+        $package->addPart('/ppt/embeddings/oleObject1.bin', 'application/vnd.openxmlformats-officedocument.oleObject', $contents);
+        $package->addPart('/ppt/embeddings/deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', $contents);
+        $package->addPart('/ppt/embeddings/book.xlsm', 'application/vnd.ms-excel.sheet.macroEnabled.12', $contents);
+        $package->saveAs($this->filename);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'ppt/presentation.xml'));
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'ppt/slides/slide1.xml'));
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'ppt/drawings/vmlDrawing1.vml'));
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'ppt/embeddings/oleObject1.bin'));
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'ppt/embeddings/deck.pptx'));
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'ppt/embeddings/book.xlsm'));
+        } finally {
+            $archive->close();
+        }
+    }
+
     public function testMovingAStoredPartKeepsItStored(): void
     {
         $package = OpenXmlPackage::create();
