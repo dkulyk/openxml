@@ -218,6 +218,54 @@ final class OfficeFileDetectorTest extends TestCase
         OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
     }
 
+    public function testExpectedTypeRejectsAMainDocumentPartThatIsMissing(): void
+    {
+        $this->writeZip([
+            self::CONTENT_TYPES_ENTRY => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                . '<Override PartName="/ppt/presentation.xml" ContentType="' . self::PRESENTATION_CONTENT_TYPE . '"/>'
+                . '</Types>',
+            '_rels/.rels' => '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                . '<Relationship Id="rId1" Type="' . RelationshipType::OFFICE_DOCUMENT . '" Target="ppt/presentation.xml"/>'
+                . '</Relationships>',
+        ]);
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        $this->expectExceptionMessage('"/ppt/presentation.xml" is missing from the package');
+        OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
+    }
+
+    public function testExpectedTypeAcceptsAMainDocumentPartStoredWithADifferentCase(): void
+    {
+        $this->writeZip([
+            self::CONTENT_TYPES_ENTRY => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                . '<Override PartName="/PPT/Presentation.xml" ContentType="' . self::PRESENTATION_CONTENT_TYPE . '"/>'
+                . '</Types>',
+            '_rels/.rels' => '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                . '<Relationship Id="rId1" Type="' . RelationshipType::OFFICE_DOCUMENT . '" Target="ppt/presentation.xml"/>'
+                . '</Relationships>',
+            'PPT/Presentation.xml' => '<presentation/>',
+        ]);
+
+        self::assertFalse(
+            OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE)->hasChanges(),
+        );
+    }
+
+    public function testExpectedTypeRejectsAMainDocumentPartWithoutADeclaredContentType(): void
+    {
+        $this->writeZip([
+            self::CONTENT_TYPES_ENTRY => self::CONTENT_TYPES_XML,
+            '_rels/.rels' => '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                . '<Relationship Id="rId1" Type="' . RelationshipType::OFFICE_DOCUMENT . '" Target="ppt/presentation.bin"/>'
+                . '</Relationships>',
+            'ppt/presentation.bin' => 'binary',
+        ]);
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        $this->expectExceptionMessage('has no declared content type');
+        OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
+    }
+
     public function writePresentation(): void
     {
         $this->writeZip([

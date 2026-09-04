@@ -533,6 +533,30 @@ final class OpenXmlPackage implements PackageInterface
         return $partName !== null && $this->hasPart($partName) ? $this->getPart($partName) : null;
     }
 
+    /**
+     * Exact entry lookup first, so the common case stays a hash hit; the scan behind it
+     * only runs for a target whose case differs from the stored entry, or for one that
+     * is not in the archive at all and is about to be rejected anyway.
+     */
+    private static function containsPart(ContainerInterface $container, string $partName): bool
+    {
+        $entryName = PartName::entry($partName);
+        if ($container->has($entryName)) {
+            return true;
+        }
+
+        // Compared by ASCII case, the OPC equivalence rule, rather than by normalizing
+        // entry names: they are only validated after this check runs.
+        $comparisonKey = strtolower($entryName);
+        foreach ($container->entries() as $candidate) {
+            if (strtolower($candidate) === $comparisonKey) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function mainDocumentPartName(Relationships $relationships): ?string
     {
         $relationship = $relationships->firstByType(RelationshipType::OFFICE_DOCUMENT);
@@ -562,10 +586,25 @@ final class OpenXmlPackage implements PackageInterface
             ))
             : null;
 
-        $contentType = $partName === null ? null : $contentTypes->getForPart($partName);
-        if ($contentType === null) {
+        if ($partName === null) {
             throw new UnsupportedFileFormatException(sprintf(
                 'The package declares no main document part; expected one of: %s.',
+                implode(', ', $expected),
+            ));
+        }
+        if (!self::containsPart($container, $partName)) {
+            throw new UnsupportedFileFormatException(sprintf(
+                'The main document part "%s" is missing from the package; expected one of: %s.',
+                $partName,
+                implode(', ', $expected),
+            ));
+        }
+
+        $contentType = $contentTypes->getForPart($partName);
+        if ($contentType === null) {
+            throw new UnsupportedFileFormatException(sprintf(
+                'The main document part "%s" has no declared content type; expected one of: %s.',
+                $partName,
                 implode(', ', $expected),
             ));
         }

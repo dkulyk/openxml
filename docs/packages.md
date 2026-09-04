@@ -34,12 +34,12 @@ $package = OpenXmlPackage::open('slides.pptx', expecting: [
 $mainDocumentPart = $package->getMainDocumentPart();
 ```
 
-Comparison is case-insensitive and uses the content type the package declares
-for that part, so a package declaring no main document part is rejected too. The
+Comparison is case-insensitive. A package is rejected the same way when it
+declares no main document part, when the relationship points at a part that is
+absent from the archive, or when that part has no declared content type. The
 check runs before part names are validated and indexed, so a file of the wrong
-kind is rejected without paying for the index. A relationship pointing at a part
-that is absent from the archive is reported by `validate()` rather than by
-`open()`. Without `expecting`, `open()` performs no document-kind check.
+kind is rejected without paying for the index. Without `expecting`, `open()`
+performs no document-kind check.
 
 ## Reading parts and relationships
 
