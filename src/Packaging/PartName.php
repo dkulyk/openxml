@@ -144,6 +144,7 @@ final class PartName
         return str_repeat('../', count($sourceSegments)) . implode('/', $targetSegments);
     }
 
+    /** @internal Superseded by PartNameIndex, which the package uses for availability checks. */
     public static function conflicts(string $first, string $second): bool
     {
         $first = self::comparisonKey(self::normalize($first));

@@ -182,6 +182,14 @@ final class OpenXmlPackage implements PackageInterface
         return new Part($this, $name, $contentType);
     }
 
+    /** The content type currently registered for a part, or null when none covers it. */
+    public function getPartContentType(string $name): ?string
+    {
+        $name = $this->findPartName(PartName::normalize($name));
+
+        return $name === null ? null : $this->contentTypes->getForPart($name);
+    }
+
     public function getParts(): \Traversable
     {
         foreach ($this->container()->entries() as $entryName) {

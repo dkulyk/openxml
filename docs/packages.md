@@ -240,6 +240,7 @@ OpenXmlPackage::edit('document.docx', function (OpenXmlPackage $package): void {
 | `hasPart(string $name): bool` | Check whether a valid OPC part exists; invalid names and package metadata return `false`. |
 | `getPart(string $name): PartInterface` | Return an ordinary or relationship part without loading its contents. |
 | `getParts(): Traversable` | Iterate ordinary package parts, excluding relationship parts and `[Content_Types].xml`. |
+| `getPartContentType(string $name): ?string` | Return the content type registered for a part, or `null` when none covers it. |
 | `addPart(string $name, string $contentType, string $contents): PartInterface` | Add or replace a small string-backed part. |
 | `addPartFromStream(string $name, string $contentType, resource $stream): PartInterface` | Stage bytes from the stream's current position to EOF. |
 | `addPartFromPath(string $name, string $contentType, string $path): PartInterface` | Stage bytes copied from a readable local file. |
