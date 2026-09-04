@@ -332,7 +332,7 @@ final class SecurityTest extends TestCase
         }
 
         $end = "PK\x05\x06" . pack('vvvvVVv', 0, 0, 2, 2, strlen($directory), strlen($body), 0);
-        file_put_contents($this->filename, $body . $directory . $end);
+        self::assertNotFalse(file_put_contents($this->filename, $body . $directory . $end));
     }
 
     /** @param array<string, string> $entries */

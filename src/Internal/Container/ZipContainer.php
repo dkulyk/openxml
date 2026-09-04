@@ -207,6 +207,11 @@ final class ZipContainer implements ContainerInterface
         $this->closeSourceArchive();
     }
 
+    /**
+     * A `zip://` URI the consumer opens itself, so the declared-size bound the
+     * container applies to its own reads does not reach it; getLocalPath() is the
+     * bounded alternative.
+     */
     public function getReadablePath(string $name): ?string
     {
         if (!$this->has($name)) {

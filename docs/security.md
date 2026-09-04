@@ -29,9 +29,16 @@ from another part name, and percent-encoded aliases before part contents are rea
 
 Limits are checked against what the ZIP directory declares. An entry that
 inflates past its declared size is stopped while it is being read, so a lying
-directory buys an attacker one buffer rather than the whole expansion. A
-copy-through save carries such an entry to the output unchanged; nothing
-expands, and reading it from the output fails the same way.
+directory buys an attacker one buffer rather than the whole expansion. That
+covers `getContents()`, `openStream()`, `getLocalPath()`, and everything the
+library itself parses. A copy-through save carries such an entry to the output
+unchanged; nothing expands, and reading it from the output fails the same way.
+
+The one read the library cannot bound is the `zip://` URI `getReadablePath()`
+returns: the consumer opens it themselves, so nothing the library holds is in
+that path. Applications that hand untrusted packages to a consumer reading raw
+paths should use `getLocalPath()`, which materializes the entry through the
+bounded read, or apply their own limit to what they read.
 
 `getLocalPath()` and the local fallback of `getReadablePath()` create private
 temporary files containing the uncompressed part bytes. They use a private

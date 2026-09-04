@@ -165,6 +165,11 @@ avoids copying the entry before the consumer reads it. New and modified parts ar
 materialized automatically. Use `getLocalPath()` when the consumer specifically
 requires a real local filesystem path.
 
+A consumer reading that `zip://` URI reads it directly, so the size bound the
+library applies to its own reads does not apply. For an untrusted package whose
+parts go to such a consumer, prefer `getLocalPath()`, which materializes the
+entry through a bounded read.
+
 ```php
 $writer->setImagePath($image->getLocalPath());
 ```
