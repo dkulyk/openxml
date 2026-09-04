@@ -201,6 +201,36 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame("\x00binary-media\xFF", $part->getContents());
     }
 
+    public function testStreamedPartReadsBackRepeatedly(): void
+    {
+        $source = fopen('php://temp', 'w+b');
+        self::assertNotFalse($source);
+        fwrite($source, 'streamed-media');
+        rewind($source);
+
+        $package = OpenXmlPackage::create();
+        $part = $package->addPartFromStream('/media/image.bin', 'application/octet-stream', $source);
+        fclose($source);
+
+        // Read in place rather than through a copy, so the second read has to find
+        // the staged stream where the first one left it.
+        self::assertSame('streamed-media', $part->getContents());
+        self::assertSame('streamed-media', $part->getContents());
+        self::assertSame('streamed-media', $package->readPart('/media/image.bin'));
+    }
+
+    public function testMovedUnchangedPartReadsFromItsSourceEntry(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/media/source.bin', 'application/octet-stream', 'moved-bytes');
+        $package->saveAs($this->filename);
+
+        $reopened = OpenXmlPackage::open($this->filename);
+        $moved = $reopened->movePart('/media/source.bin', '/assets/destination.bin');
+
+        self::assertSame('moved-bytes', $moved->getContents());
+    }
+
     public function testPartStreamCanReplaceExistingContents(): void
     {
         $package = OpenXmlPackage::create();
