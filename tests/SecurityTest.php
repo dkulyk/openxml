@@ -197,6 +197,21 @@ final class SecurityTest extends TestCase
         PartName::normalize('/word/document.xml/');
     }
 
+    public function testValidationStaysCorrectPastTheMemoisationBound(): void
+    {
+        // More names than the cache holds, so eviction runs at least once.
+        for ($index = 0; $index < 70000; ++$index) {
+            PartName::normalize('/word/media/image' . $index . '.png');
+        }
+
+        self::assertSame('/word/media/image0.png', PartName::normalize('/word/media/image0.png'));
+        self::assertSame('/word/media/image69999.png', PartName::normalize('/word/media/image69999.png'));
+
+        $this->expectException(OpenXmlException::class);
+        $this->expectExceptionMessage('Invalid OPC part name');
+        PartName::normalize('/word/media/image0.png/');
+    }
+
     public function testSuspiciousCompressionRatioIsRejectedBeforeExtraction(): void
     {
         $this->writeZip(['large.txt' => str_repeat('A', 100_000)]);
