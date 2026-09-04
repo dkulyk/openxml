@@ -266,10 +266,38 @@ final class SecurityTest extends TestCase
 
         try {
             $this->expectException(PackageLimitException::class);
+            $this->expectExceptionMessage('expands beyond the 100 bytes its ZIP directory declares');
             stream_get_contents($stream);
         } finally {
             fclose($stream);
         }
+    }
+
+    public function testMaterializingAnEntryThatInflatesBeyondItsDeclaredSizeIsRejected(): void
+    {
+        $limits = new PackageLimits(maximumPartBytes: 1048576, maximumCompressionRatio: 50.0);
+        $this->writeLyingZip('big.bin', str_repeat("\0", 8 * 1048576), declaredBytes: 100);
+        $package = OpenXmlPackage::open($this->filename, $limits);
+
+        $this->expectException(PackageLimitException::class);
+        $this->expectExceptionMessage('expands beyond the 100 bytes its ZIP directory declares');
+        $package->getPart('/big.bin')->getLocalPath();
+    }
+
+    public function testRelationshipPartThatInflatesBeyondItsDeclaredSizeIsRejected(): void
+    {
+        // The library parses this one itself, so the bound has to hold before the XML
+        // limit ever sees the content.
+        $rels = '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="urn:document" Target="big.bin"/>'
+            . str_repeat(' ', 3 * 1048576) . '</Relationships>';
+        $limits = new PackageLimits(maximumPartBytes: 4194304, maximumCompressionRatio: 50.0, maximumXmlBytes: 1048576);
+        $this->writeLyingZip('_rels/.rels', $rels, declaredBytes: 200);
+        $package = OpenXmlPackage::open($this->filename, $limits);
+
+        $this->expectException(PackageLimitException::class);
+        $this->expectExceptionMessage('expands beyond the 200 bytes its ZIP directory declares');
+        $package->getRelationships();
     }
 
     public function testHonestEntryIsReadInFull(): void
