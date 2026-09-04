@@ -241,26 +241,18 @@ final class Relationships implements \IteratorAggregate, \Countable
 
     public function toXml(): string
     {
-        $document = new \DOMDocument('1.0', 'UTF-8');
-        $document->formatOutput = true;
-
-        $root = $document->createElementNS(self::XML_NAMESPACE, 'Relationships');
-        $document->appendChild($root);
-
+        $body = '';
         foreach ($this->relationships as $relationship) {
-            $node = $document->createElementNS(self::XML_NAMESPACE, 'Relationship');
-            $node->setAttribute('Id', $relationship->getId());
-            $node->setAttribute('Type', $relationship->getType());
-            $node->setAttribute('Target', $relationship->getTarget());
-
-            if ($relationship->isExternal()) {
-                $node->setAttribute('TargetMode', 'External');
-            }
-
-            $root->appendChild($node);
+            $body .= sprintf(
+                "  <Relationship Id=\"%s\" Type=\"%s\" Target=\"%s\"%s/>\n",
+                XmlDocument::attributeValue($relationship->getId(), 'Id'),
+                XmlDocument::attributeValue($relationship->getType(), 'Type'),
+                XmlDocument::attributeValue($relationship->getTarget(), 'Target'),
+                $relationship->isExternal() ? ' TargetMode="External"' : '',
+            );
         }
 
-        return (string) $document->saveXML();
+        return XmlDocument::serialize('Relationships', self::XML_NAMESPACE, $body);
     }
 
     private function nextId(): string
