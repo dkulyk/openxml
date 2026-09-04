@@ -11,6 +11,33 @@ lookup and collision detection use the ASCII-case-insensitive equivalence rules
 defined by OPC. Relative relationship targets remain valid and are resolved using
 their source part as the base.
 
+## Opening a package
+
+`open()` accepts only OPC packages. A ZIP archive without `[Content_Types].xml`,
+such as an OpenDocument file or a plain archive, is rejected with
+`UnsupportedFileFormatException`, as are CFBF/OLE files and unrecognized data.
+
+A package's document kind is the content type of the part its package-level
+`officeDocument` relationship targets, which `getMainDocumentPart()` returns.
+The library stays format-agnostic and does not decide which kinds are
+acceptable; pass the content types the caller supports to `expecting`, and
+`open()` rejects anything else.
+
+```php
+use DK\OpenXml\OpenXmlPackage;
+
+$package = OpenXmlPackage::open('slides.pptx', expecting: [
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml',
+    'application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml',
+]);
+
+$mainDocumentPart = $package->getMainDocumentPart();
+```
+
+Comparison is case-insensitive, and a package whose `officeDocument`
+relationship is missing or dangling is rejected the same way. Without
+`expecting`, `open()` performs no document-kind check.
+
 ## Reading parts and relationships
 
 ```php

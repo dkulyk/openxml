@@ -25,10 +25,28 @@ final class OfficeFileDetector
         }
 
         if (in_array(substr($signature, 0, 4), self::ZIP_SIGNATURES, true)) {
-            return OfficeFileFormat::OpcPackage;
+            return self::hasContentTypes($filename) ? OfficeFileFormat::OpcPackage : OfficeFileFormat::Unknown;
         }
 
         return OfficeFileFormat::Unknown;
+    }
+
+    /**
+     * A ZIP signature alone does not make a package: OPC requires the content-type
+     * stream, and archives such as ODF documents or plain ZIPs share the signature.
+     */
+    private static function hasContentTypes(string $filename): bool
+    {
+        $archive = new \ZipArchive();
+        if ($archive->open($filename, \ZipArchive::RDONLY) !== true) {
+            return false;
+        }
+
+        try {
+            return $archive->locateName('[Content_Types].xml') !== false;
+        } finally {
+            $archive->close();
+        }
     }
 
     private static function inspectCompoundFile(string $filename): OfficeFileFormat

@@ -7,6 +7,9 @@ namespace DK\OpenXml\Tests;
 use DK\OpenXml\Exception\OpenXmlException;
 use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Exception\PackageValidationException;
+use DK\OpenXml\Exception\UnsupportedFileFormatException;
+use DK\OpenXml\OfficeFileDetector;
+use DK\OpenXml\OfficeFileFormat;
 use DK\OpenXml\OpenXmlPackage;
 use DK\OpenXml\Packaging\ContentTypes;
 use DK\OpenXml\Packaging\PartName;
@@ -119,9 +122,36 @@ final class SecurityTest extends TestCase
         ));
     }
 
+    public function testZipArchiveWithoutContentTypesIsNotAnOpcPackage(): void
+    {
+        $this->writeZip(['readme.txt' => 'not a package']);
+
+        self::assertSame(OfficeFileFormat::Unknown, OfficeFileDetector::detect($this->filename));
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        OpenXmlPackage::open($this->filename);
+    }
+
+    public function testOpenDocumentArchiveIsNotAnOpcPackage(): void
+    {
+        $this->writeZip([
+            'mimetype' => 'application/vnd.oasis.opendocument.presentation',
+            'META-INF/manifest.xml' => '<manifest:manifest/>',
+            'content.xml' => '<office:document-content/>',
+        ]);
+
+        self::assertSame(OfficeFileFormat::Unknown, OfficeFileDetector::detect($this->filename));
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        OpenXmlPackage::open($this->filename);
+    }
+
     public function testUnsafeZipEntryNameIsRejected(): void
     {
-        $this->writeZip(['../outside.xml' => '<outside/>']);
+        $this->writeZip([
+            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+            '../outside.xml' => '<outside/>',
+        ]);
 
         $this->expectException(OpenXmlException::class);
         $this->expectExceptionMessage('Unsafe ZIP entry name');
@@ -172,7 +202,10 @@ final class SecurityTest extends TestCase
 
     public function testSuspiciousCompressionRatioIsRejectedBeforeExtraction(): void
     {
-        $this->writeZip(['large.txt' => str_repeat('A', 100_000)]);
+        $this->writeZip([
+            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+            'large.txt' => str_repeat('A', 100_000),
+        ]);
         $limits = new PackageLimits(maximumCompressionRatio: 2.0);
 
         $this->expectException(PackageLimitException::class);

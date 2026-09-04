@@ -43,6 +43,9 @@ interface PackageInterface
 
     public function removeRelationship(string $id, ?string $sourcePartName = null): void;
 
+    /** The part targeted by the package-level `officeDocument` relationship, when the package has one. */
+    public function getMainDocumentPart(): ?PartInterface;
+
     public function inspectSignatures(): SignatureInspection;
 
     public function removeSignatures(): SignatureRemovalResult;

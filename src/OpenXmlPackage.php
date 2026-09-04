@@ -77,8 +77,14 @@ final class OpenXmlPackage implements PackageInterface
         return new self($container, $contentTypes, limits: $limits);
     }
 
-    public static function open(string $filename, ?PackageLimits $limits = null): self
-    {
+    /**
+     * @param null|list<string>|string $expecting Content type, or types, the main document part must have.
+     */
+    public static function open(
+        string $filename,
+        ?PackageLimits $limits = null,
+        string|array|null $expecting = null,
+    ): self {
         $limits ??= new PackageLimits();
         $sourceFilename = self::resolveExistingFilename($filename);
         $format = OfficeFileDetector::detect($sourceFilename);
@@ -106,7 +112,9 @@ final class OpenXmlPackage implements PackageInterface
         self::assertPartNameIntegrity($container);
 
         if (!$container->has('[Content_Types].xml')) {
-            throw new OpenXmlException('Package has no [Content_Types].xml.');
+            throw new UnsupportedFileFormatException(
+                'This is a ZIP archive without [Content_Types].xml, so it is not an OPC package.',
+            );
         }
 
         $contentTypes = ContentTypes::fromXml(
@@ -115,13 +123,18 @@ final class OpenXmlPackage implements PackageInterface
         );
         $sourceState->assertUnchanged();
 
-        return new self(
+        $package = new self(
             $container,
             $contentTypes,
             $sourceFilename,
             $sourceState,
             limits: $limits,
         );
+        if ($expecting !== null) {
+            $package->assertMainDocumentType((array) $expecting);
+        }
+
+        return $package;
     }
 
     /**
@@ -508,6 +521,47 @@ final class OpenXmlPackage implements PackageInterface
     public function removeRelationship(string $id, ?string $sourcePartName = null): void
     {
         $this->getRelationships($sourcePartName)->remove($id);
+    }
+
+    public function getMainDocumentPart(): ?PartInterface
+    {
+        foreach ($this->getRelationships() as $relationship) {
+            if ($relationship->getType() !== RelationshipType::OFFICE_DOCUMENT || $relationship->isExternal()) {
+                continue;
+            }
+
+            $targetPartName = (string) $relationship->getTargetPartName();
+
+            return $this->hasPart($targetPartName) ? $this->getPart($targetPartName) : null;
+        }
+
+        return null;
+    }
+
+    /** @param list<string> $expected */
+    private function assertMainDocumentType(array $expected): void
+    {
+        $mainDocumentPart = $this->getMainDocumentPart();
+        if ($mainDocumentPart === null) {
+            throw new UnsupportedFileFormatException(sprintf(
+                'The package has no main document part; expected one of: %s.',
+                implode(', ', $expected),
+            ));
+        }
+
+        $contentType = $mainDocumentPart->getContentType();
+        foreach ($expected as $expectedContentType) {
+            if (strcasecmp($contentType, $expectedContentType) === 0) {
+                return;
+            }
+        }
+
+        throw new UnsupportedFileFormatException(sprintf(
+            'The main document part "%s" is "%s"; expected one of: %s.',
+            $mainDocumentPart->getName(),
+            $contentType,
+            implode(', ', $expected),
+        ));
     }
 
     public function inspectSignatures(): SignatureInspection

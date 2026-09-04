@@ -10,6 +10,7 @@ use DK\OpenXml\Exception\PackageLimitException;
 use DK\OpenXml\Exception\PackageValidationException;
 use DK\OpenXml\Exception\PartInUseException;
 use DK\OpenXml\Exception\PartNotFoundException;
+use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\OpenXmlPackage;
 use DK\OpenXml\Packaging\PartInterface;
 use DK\OpenXml\Packaging\RelationshipType;
@@ -18,6 +19,10 @@ use PHPUnit\Framework\TestCase;
 
 final class OpenXmlPackageTest extends TestCase
 {
+    private const PRESENTATION_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml';
+
+    private const DOCUMENT_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+
     private string $filename;
 
     protected function setUp(): void
@@ -1164,6 +1169,57 @@ final class OpenXmlPackageTest extends TestCase
 
         $this->expectException(ConcurrentModificationException::class);
         $package->save();
+    }
+
+    public function testExpectedMainDocumentTypeIsAccepted(): void
+    {
+        $this->createPresentation();
+
+        $package = OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
+
+        self::assertSame('/ppt/presentation.xml', $package->getMainDocumentPart()?->getName());
+    }
+
+    public function testExpectedMainDocumentTypeAcceptsAnyListedType(): void
+    {
+        $this->createPresentation();
+
+        $package = OpenXmlPackage::open($this->filename, expecting: [
+            'application/vnd.openxmlformats-officedocument.presentationml.template.main+xml',
+            strtoupper(self::PRESENTATION_CONTENT_TYPE),
+        ]);
+
+        self::assertNotNull($package->getMainDocumentPart());
+    }
+
+    public function testUnexpectedMainDocumentTypeIsRejected(): void
+    {
+        $this->createPresentation();
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        $this->expectExceptionMessage('presentationml.presentation.main+xml"; expected one of');
+        OpenXmlPackage::open($this->filename, expecting: self::DOCUMENT_CONTENT_TYPE);
+    }
+
+    public function testPackageWithoutAMainDocumentPartIsRejectedWhenATypeIsExpected(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/ppt/presentation.xml', self::PRESENTATION_CONTENT_TYPE, '<presentation/>');
+        $package->saveAs($this->filename);
+
+        self::assertNull(OpenXmlPackage::open($this->filename)->getMainDocumentPart());
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        $this->expectExceptionMessage('no main document part');
+        OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
+    }
+
+    private function createPresentation(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/ppt/presentation.xml', self::PRESENTATION_CONTENT_TYPE, '<presentation/>');
+        $package->addRelationship(RelationshipType::OFFICE_DOCUMENT, 'ppt/presentation.xml');
+        $package->saveAs($this->filename);
     }
 
     public function testLazyPartReadRejectsAChangedSourcePackage(): void

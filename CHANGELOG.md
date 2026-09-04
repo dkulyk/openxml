@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Added
+
+- `getMainDocumentPart()` returns the part targeted by the package-level
+  `officeDocument` relationship, and `open()` accepts an `expecting` content
+  type, or list of them, that the main document part must match. The library
+  does not enumerate document kinds; callers pass the content types they
+  support and get `UnsupportedFileFormatException` for anything else.
+
+### Fixed
+
+- A ZIP archive without `[Content_Types].xml`, such as an OpenDocument file or
+  a plain archive, is no longer detected as an OPC package. `detect()` reports
+  it as `Unknown` and `open()` throws `UnsupportedFileFormatException` instead
+  of the generic `OpenXmlException` it raised after opening the archive.
+
 ## [0.8.0] - 2026-09-04
 
 ### Added
