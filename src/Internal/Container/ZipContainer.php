@@ -323,6 +323,11 @@ final class ZipContainer implements ContainerInterface
         $this->removed[$source] = true;
         unset($this->removed[$destination]);
 
+        if (isset($this->stored[$source])) {
+            $this->stored[$destination] = true;
+        }
+        unset($this->stored[$source]);
+
         if (array_key_exists($source, $this->staged)) {
             $this->staged[$destination] = $this->staged[$source];
             unset($this->staged[$source]);

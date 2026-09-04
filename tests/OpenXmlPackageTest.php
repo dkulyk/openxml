@@ -1356,6 +1356,23 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame($contents, $reopened->readPart('/word/media/image1.jpeg'));
     }
 
+    public function testMovingAStoredPartKeepsItStored(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/word/media/image1.jpeg', 'image/jpeg', str_repeat('a', 4096));
+        $package->movePart('/word/media/image1.jpeg', '/word/media/image2.jpeg');
+        $package->saveAs($this->filename);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/media/image2.jpeg'));
+        } finally {
+            $archive->close();
+        }
+    }
+
     public function testRewritingAStoredPartKeepsItStored(): void
     {
         $package = OpenXmlPackage::create();

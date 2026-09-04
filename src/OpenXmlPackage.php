@@ -1117,7 +1117,7 @@ final class OpenXmlPackage implements PackageInterface
         }
     }
 
-    /** Write an override only when no default already yields the same type. */
+    /** Whether the part currently registered under this name is worth deflating. */
     private function partCompresses(string $partName): bool
     {
         return self::compresses($this->contentTypes->getForPart($partName));
