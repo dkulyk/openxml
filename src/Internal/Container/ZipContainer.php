@@ -130,6 +130,8 @@ final class ZipContainer implements ContainerInterface
     public function read(string $name): string
     {
         $stream = $this->entryStream($name);
+        // After entryStream(), not before: a lazily staged entry is recorded with a
+        // size of 0 until producing it sets the real one.
         $declaredBytes = $this->entries[$name];
 
         try {

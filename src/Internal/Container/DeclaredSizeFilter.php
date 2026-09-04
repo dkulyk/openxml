@@ -17,7 +17,7 @@ use DK\OpenXml\Exception\PackageLimitException;
  */
 final class DeclaredSizeFilter extends \php_user_filter
 {
-    public const NAME = 'dk-openxml.declared-size';
+    private const NAME = 'dk-openxml.declared-size';
 
     private int $seen = 0;
 
