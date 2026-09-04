@@ -18,9 +18,12 @@ All notable changes to this project will be documented in this file. The format 
   the source archive is still released with the package.
 - Parts whose content type is already a compressed stream — JPEG, PNG, GIF,
   WebP, HEIC, HEIF, AVIF, JP2, MP3, MP4, Ogg and WebM audio, any `video/*`, ZIP,
-  gzip, and embedded OPC or OpenDocument files — are stored in the package
-  instead of being deflated a second time. Everything else, including SVG, BMP,
-  EMF, WMF and any unrecognised type, is still deflated.
+  gzip, and embedded OPC or OpenDocument documents — are stored in the package
+  instead of being deflated a second time. The types are matched exactly, not by
+  family: an embedded deck is `…presentationml.presentation` and a slide inside
+  the package is `…presentationml.slide+xml`, and only the first is a ZIP.
+  Everything else, including SVG, BMP, EMF, WMF, VML, OLE objects and any
+  unrecognised type, is still deflated.
 
 ### Fixed
 

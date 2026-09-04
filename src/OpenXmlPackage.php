@@ -1131,8 +1131,12 @@ final class OpenXmlPackage implements PackageInterface
         return self::compresses($this->contentTypes->getForPart($partName));
     }
 
-    /** @var array<string, true> Content types whose payload is already a compressed stream. */
+    /**
+     * @var array<string, true> Content types whose payload is already a compressed
+     *                          stream, so deflating it again only costs time.
+     */
     private const STORED_CONTENT_TYPES = [
+        // Images and audio that carry their own compression.
         'image/png' => true,
         'image/jpeg' => true,
         'image/gif' => true,
@@ -1145,17 +1149,49 @@ final class OpenXmlPackage implements PackageInterface
         'audio/mp4' => true,
         'audio/ogg' => true,
         'audio/webm' => true,
+        // Archives, including the OPC and ODF documents a package embeds whole.
         'application/zip' => true,
         'application/gzip' => true,
         'application/x-zip-compressed' => true,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => true,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.template' => true,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => true,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.template' => true,
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => true,
+        'application/vnd.openxmlformats-officedocument.presentationml.template' => true,
+        'application/vnd.openxmlformats-officedocument.presentationml.slideshow' => true,
+        'application/vnd.ms-word.document.macroenabled.12' => true,
+        'application/vnd.ms-word.template.macroenabled.12' => true,
+        'application/vnd.ms-excel.sheet.macroenabled.12' => true,
+        'application/vnd.ms-excel.sheet.binary.macroenabled.12' => true,
+        'application/vnd.ms-excel.template.macroenabled.12' => true,
+        'application/vnd.ms-excel.addin.macroenabled.12' => true,
+        'application/vnd.ms-powerpoint.presentation.macroenabled.12' => true,
+        'application/vnd.ms-powerpoint.template.macroenabled.12' => true,
+        'application/vnd.ms-powerpoint.slideshow.macroenabled.12' => true,
+        'application/vnd.ms-powerpoint.addin.macroenabled.12' => true,
+        'application/vnd.oasis.opendocument.text' => true,
+        'application/vnd.oasis.opendocument.text-master' => true,
+        'application/vnd.oasis.opendocument.text-template' => true,
+        'application/vnd.oasis.opendocument.spreadsheet' => true,
+        'application/vnd.oasis.opendocument.spreadsheet-template' => true,
+        'application/vnd.oasis.opendocument.presentation' => true,
+        'application/vnd.oasis.opendocument.presentation-template' => true,
+        'application/vnd.oasis.opendocument.graphics' => true,
+        'application/vnd.oasis.opendocument.graphics-template' => true,
+        'application/vnd.oasis.opendocument.chart' => true,
+        'application/vnd.oasis.opendocument.formula' => true,
     ];
 
     /**
      * Whether deflate is worth spending on a part of this content type.
      *
-     * The list is positive: a type is only excluded when its payload is already a
-     * compressed stream, so that anything unrecognised, and compressible formats
-     * that look like media (SVG, BMP, EMF, WMF), keep being deflated.
+     * The list is positive and exact: a type is only excluded when its payload is
+     * already a compressed stream, so that anything unrecognised, and compressible
+     * formats that look like media (SVG, BMP, EMF, WMF), keep being deflated.
+     * Matching a family by prefix is what broke this before -- an embedded
+     * presentation and every slide inside the package share the type prefix
+     * "…officedocument.presentationml.", and only the container is a ZIP.
      */
     private static function compresses(?string $contentType): bool
     {
@@ -1166,11 +1202,8 @@ final class OpenXmlPackage implements PackageInterface
         $parameters = strpos($contentType, ';');
         $type = strtolower(trim($parameters === false ? $contentType : substr($contentType, 0, $parameters)));
 
-        return !isset(self::STORED_CONTENT_TYPES[$type])
-            && !str_starts_with($type, 'video/')
-            // An embedded workbook, presentation, or document is itself a ZIP.
-            && !str_starts_with($type, 'application/vnd.openxmlformats-officedocument.')
-            && !str_starts_with($type, 'application/vnd.oasis.opendocument.');
+        // video/ is the one family whose every member is a compressed stream.
+        return !isset(self::STORED_CONTENT_TYPES[$type]) && !str_starts_with($type, 'video/');
     }
 
     private function registerContentType(string $name, string $contentType): void
