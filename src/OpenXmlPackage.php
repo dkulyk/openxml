@@ -110,7 +110,6 @@ final class OpenXmlPackage implements PackageInterface
 
         $sourceState = SourceFileState::capture($sourceFilename);
         $container = ZipContainer::open($sourceFilename, $limits, $sourceState);
-        self::assertPartNameIntegrity($container);
 
         if (!$container->has('[Content_Types].xml')) {
             throw new UnsupportedFileFormatException(
@@ -122,20 +121,23 @@ final class OpenXmlPackage implements PackageInterface
             $container->read('[Content_Types].xml'),
             $limits->maximumXmlBytes,
         );
+
+        // Checked before the passes over every entry below, so a package of the wrong
+        // kind is rejected without validating its names or indexing them.
+        if ($expecting !== null) {
+            self::assertMainDocumentType($container, $contentTypes, $limits, (array) $expecting);
+        }
+
+        self::assertPartNameIntegrity($container);
         $sourceState->assertUnchanged();
 
-        $package = new self(
+        return new self(
             $container,
             $contentTypes,
             $sourceFilename,
             $sourceState,
             limits: $limits,
         );
-        if ($expecting !== null) {
-            $package->assertMainDocumentType((array) $expecting);
-        }
-
-        return $package;
     }
 
     /**
@@ -526,31 +528,48 @@ final class OpenXmlPackage implements PackageInterface
 
     public function getMainDocumentPart(): ?PartInterface
     {
-        foreach ($this->getRelationships() as $relationship) {
-            if ($relationship->getType() !== RelationshipType::OFFICE_DOCUMENT || $relationship->isExternal()) {
-                continue;
-            }
+        $partName = self::mainDocumentPartName($this->getRelationships());
 
-            $targetPartName = (string) $relationship->getTargetPartName();
-
-            return $this->hasPart($targetPartName) ? $this->getPart($targetPartName) : null;
-        }
-
-        return null;
+        return $partName !== null && $this->hasPart($partName) ? $this->getPart($partName) : null;
     }
 
-    /** @param list<string> $expected */
-    private function assertMainDocumentType(array $expected): void
+    private static function mainDocumentPartName(Relationships $relationships): ?string
     {
-        $mainDocumentPart = $this->getMainDocumentPart();
-        if ($mainDocumentPart === null) {
+        $relationship = $relationships->firstByType(RelationshipType::OFFICE_DOCUMENT);
+
+        return $relationship === null || $relationship->isExternal()
+            ? null
+            : $relationship->getTargetPartName();
+    }
+
+    /**
+     * Reads the package relationships straight from the container: the check runs before
+     * the package exists, so that a rejected file never pays for its part-name index.
+     *
+     * @param list<string> $expected
+     */
+    private static function assertMainDocumentType(
+        ContainerInterface $container,
+        ContentTypes $contentTypes,
+        PackageLimits $limits,
+        array $expected,
+    ): void {
+        $entryName = PartName::entry(PartName::relationshipsName());
+        $partName = $container->has($entryName)
+            ? self::mainDocumentPartName(Relationships::fromXml(
+                $container->read($entryName),
+                maximumXmlBytes: $limits->maximumXmlBytes,
+            ))
+            : null;
+
+        $contentType = $partName === null ? null : $contentTypes->getForPart($partName);
+        if ($contentType === null) {
             throw new UnsupportedFileFormatException(sprintf(
-                'The package has no main document part; expected one of: %s.',
+                'The package declares no main document part; expected one of: %s.',
                 implode(', ', $expected),
             ));
         }
 
-        $contentType = $mainDocumentPart->getContentType();
         foreach ($expected as $expectedContentType) {
             if (strcasecmp($contentType, $expectedContentType) === 0) {
                 return;
@@ -559,7 +578,7 @@ final class OpenXmlPackage implements PackageInterface
 
         throw new UnsupportedFileFormatException(sprintf(
             'The main document part "%s" is "%s"; expected one of: %s.',
-            $mainDocumentPart->getName(),
+            $partName,
             $contentType,
             implode(', ', $expected),
         ));

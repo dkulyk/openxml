@@ -1214,6 +1214,46 @@ final class OpenXmlPackageTest extends TestCase
         OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
     }
 
+    public function testExpectedTypeIsCheckedBeforePartNameValidation(): void
+    {
+        $this->writeRawZip([
+            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                . '<Override PartName="/word/document.xml" ContentType="' . self::DOCUMENT_CONTENT_TYPE . '"/>'
+                . '</Types>',
+            '_rels/.rels' => '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                . '<Relationship Id="rId1" Type="' . RelationshipType::OFFICE_DOCUMENT . '" Target="word/document.xml"/>'
+                . '</Relationships>',
+            'word/document.xml' => '<document/>',
+            'custom/data.xml' => '<data/>',
+            'custom/data.xml/child' => '<child/>',
+        ]);
+
+        // Without an expected type the conflicting names are what stops the open.
+        try {
+            OpenXmlPackage::open($this->filename);
+            self::fail('The conflicting part names should be rejected.');
+        } catch (OpenXmlException $exception) {
+            self::assertStringContainsString('is derivable from part', $exception->getMessage());
+        }
+
+        $this->expectException(UnsupportedFileFormatException::class);
+        $this->expectExceptionMessage('wordprocessingml.document.main+xml"; expected one of');
+        OpenXmlPackage::open($this->filename, expecting: self::PRESENTATION_CONTENT_TYPE);
+    }
+
+    /** @param array<string, string> $entries */
+    private function writeRawZip(array $entries): void
+    {
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename, \ZipArchive::OVERWRITE) === true);
+
+        foreach ($entries as $name => $contents) {
+            self::assertTrue($archive->addFromString($name, $contents));
+        }
+
+        self::assertTrue($archive->close());
+    }
+
     private function createPresentation(): void
     {
         $package = OpenXmlPackage::create();
