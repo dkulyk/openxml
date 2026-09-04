@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- Reads go straight to their source: an unchanged entry is read from the archive
+  rather than through a stream and its wrapper objects, and a staged part is read
+  where it already is instead of being copied first.
+
 - Relationship collections are held for the package's lifetime instead of only
   while something else keeps them alive. Every whole-package operation walks all
   relationships, and each walk re-parsed every `.rels` part. The package keeps
