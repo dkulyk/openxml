@@ -108,6 +108,13 @@ Input streams are consumed from their current position to EOF and copied to
 package-owned temporary storage. The library never closes the caller's resource,
 and the caller may close it as soon as the method returns.
 
+A part whose content type names an already-compressed payload — JPEG, PNG, GIF,
+WebP, HEIC, HEIF, AVIF, JP2, MP3, MP4, Ogg or WebM audio, any `video/*`, ZIP,
+gzip, or an embedded OPC or OpenDocument file — is stored in the package rather
+than deflated a second time, which is the same size for far less work. Types
+that do compress, including SVG, BMP, EMF and WMF, and any type the library does
+not recognise, are deflated.
+
 ```php
 $contents = $part->openStream();
 try {

@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file. The format 
   relationships, and each walk re-parsed every `.rels` part. The package keeps
   referring to itself weakly from the collections, so nothing holds a cycle and
   the source archive is still released with the package.
+- Parts whose content type is already a compressed stream — JPEG, PNG, GIF,
+  WebP, HEIC, HEIF, AVIF, JP2, MP3, MP4, Ogg and WebM audio, any `video/*`, ZIP,
+  gzip, and embedded OPC or OpenDocument files — are stored in the package
+  instead of being deflated a second time. Everything else, including SVG, BMP,
+  EMF, WMF and any unrecognised type, is still deflated.
 
 ### Fixed
 

@@ -1307,6 +1307,14 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame([], $package->validate());
     }
 
+    private static function compressionMethod(\ZipArchive $archive, string $entryName): int
+    {
+        $entry = $archive->statName($entryName);
+        self::assertNotFalse($entry, sprintf('ZIP entry "%s" is missing.', $entryName));
+
+        return $entry['comp_method'];
+    }
+
     /** @param array<string, string> $entries */
     private function writeRawZip(array $entries): void
     {
@@ -1318,6 +1326,68 @@ final class OpenXmlPackageTest extends TestCase
         }
 
         self::assertTrue($archive->close());
+    }
+
+    public function testAlreadyCompressedMediaIsStoredAndOtherPartsAreDeflated(): void
+    {
+        $package = OpenXmlPackage::create();
+        // Compressible bytes, so a deflated entry is visibly smaller than a stored one.
+        $contents = str_repeat('a', 4096);
+        $package->addPart('/word/media/image1.jpeg', 'image/jpeg', $contents);
+        $package->addPart('/word/media/diagram.svg', 'image/svg+xml', $contents);
+        $package->addPart('/word/media/photo.png', 'image/PNG; charset=binary', $contents);
+        $package->addPart('/word/document.xml', 'application/xml', $contents);
+        $package->saveAs($this->filename);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/media/image1.jpeg'));
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/media/photo.png'));
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'word/media/diagram.svg'));
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'word/document.xml'));
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, '[Content_Types].xml'));
+        } finally {
+            $archive->close();
+        }
+
+        $reopened = OpenXmlPackage::open($this->filename);
+        self::assertSame($contents, $reopened->readPart('/word/media/image1.jpeg'));
+    }
+
+    public function testMovingAStoredPartKeepsItStored(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/word/media/image1.jpeg', 'image/jpeg', str_repeat('a', 4096));
+        $package->movePart('/word/media/image1.jpeg', '/word/media/image2.jpeg');
+        $package->saveAs($this->filename);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/media/image2.jpeg'));
+        } finally {
+            $archive->close();
+        }
+    }
+
+    public function testRewritingAStoredPartKeepsItStored(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/word/media/image1.jpeg', 'image/jpeg', str_repeat('a', 4096));
+        $package->writePart('/word/media/image1.jpeg', str_repeat('b', 4096));
+        $package->saveAs($this->filename);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/media/image1.jpeg'));
+        } finally {
+            $archive->close();
+        }
     }
 
     private function createPresentation(): void
