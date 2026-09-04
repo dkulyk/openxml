@@ -721,6 +721,17 @@ final class OpenXmlPackageTest extends TestCase
         $relationship->getTargetPart();
     }
 
+    public function testRelationshipsSurviveTheCallerDroppingThem(): void
+    {
+        $package = OpenXmlPackage::create();
+        $package->addPart('/document.xml', 'application/xml', '<document/>');
+        $package->addRelationship('urn:document', 'document.xml');
+        $first = spl_object_id($package->getRelationships());
+        gc_collect_cycles();
+
+        self::assertSame($first, spl_object_id($package->getRelationships()));
+    }
+
     public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
     {
         $package = OpenXmlPackage::create();

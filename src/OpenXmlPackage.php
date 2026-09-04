@@ -41,7 +41,7 @@ final class OpenXmlPackage implements PackageInterface
 {
     private PartNameIndex $partNames;
 
-    /** @var array<string, \WeakReference<Relationships>> Source part name ('' for the package) => live collection. */
+    /** @var array<string, Relationships> Source part name ('' for the package) => live collection. */
     private array $relationships = [];
 
     private MaterializationPool $materializations;
@@ -473,17 +473,12 @@ final class OpenXmlPackage implements PackageInterface
         // overwrite each other's changes when they persist.
         $cacheKey = strtolower($sourcePartName ?? '');
         if (isset($this->relationships[$cacheKey])) {
-            $relationships = $this->relationships[$cacheKey]->get();
-            if ($relationships !== null) {
-                return $relationships;
-            }
-
-            unset($this->relationships[$cacheKey]);
+            return $this->relationships[$cacheKey];
         }
 
         $relationshipEntryName = PartName::entry($this->relationshipsPartName($sourcePartName));
-        // Weak: the container keeps changed collections alive through their lazy
-        // writer, so a strong back-reference here would form a cycle.
+        // The collection refers back weakly, so holding it here forms no cycle and
+        // the package's ZIP archive is still released when the package is.
         $package = \WeakReference::create($this);
         $onChange = static function (Relationships $relationships) use ($package, $sourcePartName): void {
             $package->get()?->writeRelationships($relationships, $sourcePartName);
@@ -498,9 +493,10 @@ final class OpenXmlPackage implements PackageInterface
                 $this->limits->maximumXmlBytes,
             )
             : new Relationships($this, $sourcePartName, $onChange);
-        $this->relationships[$cacheKey] = \WeakReference::create($relationships);
 
-        return $relationships;
+        // Kept for the package's lifetime: every whole-package operation walks all
+        // relationships, and re-parsing each .rels on each walk dominated them.
+        return $this->relationships[$cacheKey] = $relationships;
     }
 
     public function addRelationship(

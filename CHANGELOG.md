@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Changed
+
+- Relationship collections are held for the package's lifetime instead of only
+  while something else keeps them alive. Every whole-package operation walks all
+  relationships, and each walk re-parsed every `.rels` part. The package keeps
+  referring to itself weakly from the collections, so nothing holds a cycle and
+  the source archive is still released with the package.
+
 ### Fixed
 
 - A package containing an entry that the content types do not cover no longer
