@@ -726,10 +726,20 @@ final class OpenXmlPackageTest extends TestCase
         $package = OpenXmlPackage::create();
         $package->addPart('/document.xml', 'application/xml', '<document/>');
         $package->addRelationship('urn:document', 'document.xml');
-        $first = spl_object_id($package->getRelationships());
+        $package->saveAs($this->filename);
+
+        // Reopened, so nothing else holds the collection: an unmodified one has no
+        // lazy writer keeping it alive.
+        $reopened = OpenXmlPackage::open($this->filename);
+        $relationships = $reopened->getRelationships();
+        // A weak handle rather than an object id: ids are reused once an object is
+        // freed, so a new collection could take the id the first one had.
+        $first = \WeakReference::create($relationships);
+
+        unset($relationships);
         gc_collect_cycles();
 
-        self::assertSame($first, spl_object_id($package->getRelationships()));
+        self::assertSame($first->get(), $reopened->getRelationships());
     }
 
     public function testRelationshipCacheDoesNotCreateAPackageReferenceCycle(): void
