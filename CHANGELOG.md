@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Fixed
+
+- A package containing an entry that the content types do not cover no longer
+  becomes unusable. `getParts()` skipped nothing and threw, which also stopped
+  `getInboundRelationships()`, `removePart()`, `removePartAndRelationships()`
+  and `movePart()`, so the package could be opened and validated but never
+  repaired. `getParts()` now skips such an entry, `validate()` still reports it,
+  and `setDefaultContentType()` makes it a part.
+
 ## [0.8.1] - 2026-09-04
 
 ### Added

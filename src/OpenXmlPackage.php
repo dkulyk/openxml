@@ -191,12 +191,13 @@ final class OpenXmlPackage implements PackageInterface
 
             $partName = '/' . $entryName;
             if (!PartName::isRelationshipsPart($partName)) {
+                // An entry the content types do not cover is not a part. validate()
+                // reports it; stopping here would leave such a package unrepairable,
+                // since fixing it means adding the content type it lacks.
                 $contentType = $this->contentTypes->getForPart($partName);
-                if ($contentType === null) {
-                    throw new OpenXmlException(sprintf('No content type is registered for part "%s".', $partName));
+                if ($contentType !== null) {
+                    yield new Part($this, $partName, $contentType);
                 }
-
-                yield new Part($this, $partName, $contentType);
             }
         }
     }
@@ -350,13 +351,8 @@ final class OpenXmlPackage implements PackageInterface
             throw new PartNotFoundException(sprintf('Package part does not exist: %s', $requestedName));
         }
 
-        $sourcePartNames = [];
-        foreach ($this->getParts() as $part) {
-            $sourcePartNames[] = $part->getName();
-        }
-
         $references = [];
-        foreach ([null, ...$sourcePartNames] as $sourcePartName) {
+        foreach ([null, ...$this->relationshipSourceNames()] as $sourcePartName) {
             foreach ($this->getRelationships($sourcePartName)->getByTargetPart($partName) as $relationship) {
                 $references[] = new RelationshipReference($sourcePartName, $relationship);
             }
@@ -957,17 +953,31 @@ final class OpenXmlPackage implements PackageInterface
     }
 
     /**
+     * Names that can own relationships, taken from the part-name index rather than
+     * from getParts(): a package-wide walk must not depend on every entry having a
+     * content type.
+     *
+     * @return list<string>
+     */
+    private function relationshipSourceNames(): array
+    {
+        $names = [];
+        foreach ($this->partNames as $partName) {
+            if (!PartName::isRelationshipsPart($partName)) {
+                $names[] = $partName;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
      * @return list<array{?string, string, string}>
      */
     private function relationshipChangesForMove(string $source, string $destination): array
     {
-        $partNames = [];
-        foreach ($this->getParts() as $part) {
-            $partNames[] = $part->getName();
-        }
-
         $changes = [];
-        foreach ([null, ...$partNames] as $relationshipSource) {
+        foreach ([null, ...$this->relationshipSourceNames()] as $relationshipSource) {
             foreach ($this->getRelationships($relationshipSource) as $relationship) {
                 if ($relationship->isExternal()) {
                     continue;
