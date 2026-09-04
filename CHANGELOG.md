@@ -41,6 +41,10 @@ All notable changes to this project will be documented in this file. The format 
   entry declaring a small size and inflating to a large one delivered every byte
   through `getContents()`, `openStream()`, and `getLocalPath()`. Such an entry is
   now rejected with a `PackageLimitException` while it is read.
+- `PartInterface::getContentType()` reports the content type registered now
+  rather than the one registered when the handle was made, so a part obtained
+  before `setDefaultContentType()` no longer reports a stale type. The package
+  exposes the same lookup as `getPartContentType()`.
 
 ## [0.8.1] - 2026-09-04
 

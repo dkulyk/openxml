@@ -201,6 +201,26 @@ final class OpenXmlPackageTest extends TestCase
         self::assertSame("\x00binary-media\xFF", $part->getContents());
     }
 
+    public function testPartReportsTheContentTypeRegisteredNow(): void
+    {
+        $this->writeRawZip([
+            '[Content_Types].xml' => '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                . '<Default Extension="xml" ContentType="application/xml"/>'
+                . '<Default Extension="bin" ContentType="application/octet-stream"/></Types>',
+            'media/image.bin' => 'bytes',
+        ]);
+        $package = OpenXmlPackage::open($this->filename);
+        $part = $package->getPart('/media/image.bin');
+        self::assertSame('application/octet-stream', $part->getContentType());
+
+        $package->setDefaultContentType('bin', 'image/png');
+
+        // The handle was made before the default changed.
+        self::assertSame('image/png', $part->getContentType());
+        self::assertSame('image/png', $package->getPartContentType('/media/image.bin'));
+        self::assertNull($package->getPartContentType('/media/absent.bin'));
+    }
+
     public function testStreamedPartReadsBackRepeatedly(): void
     {
         $source = fopen('php://temp', 'w+b');

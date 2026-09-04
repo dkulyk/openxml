@@ -23,7 +23,10 @@ final class Part implements PartInterface
 
     public function getContentType(): string
     {
-        return $this->contentType;
+        // Resolved through the package rather than frozen at construction: a default
+        // or override registered afterwards changes what this part's type is. The
+        // constructed value stands in once the package no longer covers the name.
+        return $this->package->getPartContentType($this->name) ?? $this->contentType;
     }
 
     public function getContents(): string
