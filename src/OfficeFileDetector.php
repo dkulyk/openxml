@@ -18,6 +18,26 @@ final class OfficeFileDetector
 
     public static function detect(string $filename): OfficeFileFormat
     {
+        $format = self::detectContainer($filename);
+
+        // A ZIP signature alone does not make a package: OPC requires the content-type
+        // stream, and archives such as ODF documents or plain ZIPs share the signature.
+        if ($format === OfficeFileFormat::OpcPackage && !self::hasContentTypes($filename)) {
+            return OfficeFileFormat::Unknown;
+        }
+
+        return $format;
+    }
+
+    /**
+     * Classify the container without opening a ZIP archive, reporting `OpcPackage` for
+     * any ZIP. Callers that go on to open the container confirm `[Content_Types].xml`
+     * there instead of reading the archive twice.
+     *
+     * @internal
+     */
+    public static function detectContainer(string $filename): OfficeFileFormat
+    {
         $signature = self::readSignature($filename);
 
         if ($signature === self::CFBF_SIGNATURE) {
@@ -25,16 +45,12 @@ final class OfficeFileDetector
         }
 
         if (in_array(substr($signature, 0, 4), self::ZIP_SIGNATURES, true)) {
-            return self::hasContentTypes($filename) ? OfficeFileFormat::OpcPackage : OfficeFileFormat::Unknown;
+            return OfficeFileFormat::OpcPackage;
         }
 
         return OfficeFileFormat::Unknown;
     }
 
-    /**
-     * A ZIP signature alone does not make a package: OPC requires the content-type
-     * stream, and archives such as ODF documents or plain ZIPs share the signature.
-     */
     private static function hasContentTypes(string $filename): bool
     {
         $archive = new \ZipArchive();

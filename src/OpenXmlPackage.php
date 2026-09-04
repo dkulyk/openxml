@@ -87,7 +87,8 @@ final class OpenXmlPackage implements PackageInterface
     ): self {
         $limits ??= new PackageLimits();
         $sourceFilename = self::resolveExistingFilename($filename);
-        $format = OfficeFileDetector::detect($sourceFilename);
+        // The container check below is authoritative for OPC, so the archive is opened once.
+        $format = OfficeFileDetector::detectContainer($sourceFilename);
 
         if ($format === OfficeFileFormat::EncryptedOpcPackage) {
             throw new EncryptedPackageException(

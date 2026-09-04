@@ -148,10 +148,7 @@ final class SecurityTest extends TestCase
 
     public function testUnsafeZipEntryNameIsRejected(): void
     {
-        $this->writeZip([
-            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
-            '../outside.xml' => '<outside/>',
-        ]);
+        $this->writeZip(['../outside.xml' => '<outside/>']);
 
         $this->expectException(OpenXmlException::class);
         $this->expectExceptionMessage('Unsafe ZIP entry name');
@@ -202,10 +199,7 @@ final class SecurityTest extends TestCase
 
     public function testSuspiciousCompressionRatioIsRejectedBeforeExtraction(): void
     {
-        $this->writeZip([
-            '[Content_Types].xml' => '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
-            'large.txt' => str_repeat('A', 100_000),
-        ]);
+        $this->writeZip(['large.txt' => str_repeat('A', 100_000)]);
         $limits = new PackageLimits(maximumCompressionRatio: 2.0);
 
         $this->expectException(PackageLimitException::class);
