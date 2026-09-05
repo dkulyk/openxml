@@ -34,9 +34,9 @@ final class Part implements PartInterface
         return $this->package->readPart($this->name);
     }
 
-    public function setContents(string $contents): void
+    public function setContents(string $contents, ?bool $compress = null): void
     {
-        $this->package->writePart($this->name, $contents);
+        $this->package->writePart($this->name, $contents, $compress);
     }
 
     public function openStream()
@@ -54,14 +54,14 @@ final class Part implements PartInterface
         return $this->package->getPartLocalPath($this->name);
     }
 
-    public function setContentsFromStream($stream): void
+    public function setContentsFromStream($stream, ?bool $compress = null): void
     {
-        $this->package->writePartFromStream($this->name, $stream);
+        $this->package->writePartFromStream($this->name, $stream, $compress);
     }
 
-    public function setContentsFromPath(string $path): void
+    public function setContentsFromPath(string $path, ?bool $compress = null): void
     {
-        $this->package->writePartFromPath($this->name, $path);
+        $this->package->writePartFromPath($this->name, $path, $compress);
     }
 
     public function getRelationships(): Relationships

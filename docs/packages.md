@@ -119,6 +119,34 @@ their type prefix: the deck is `…presentationml.presentation` and a slide is
 WMF, VML drawings and OLE objects, and any type the library does not recognise,
 are deflated.
 
+Formats outlive releases of this library. A codec the list does not know about
+is registered once, rather than special-cased at every call site:
+
+```php
+use DK\OpenXml\Packaging\ContentCompression;
+
+ContentCompression::store('image/jxl');
+```
+
+Registration is additive and process-wide, applies to parts written after it,
+and is undone by `ContentCompression::reset()`.
+
+When a single part disagrees with what its content type implies — an
+`application/octet-stream` that is really a ZIP, or a JPEG small enough that
+deflate still wins — pass `$compress` at the point the bytes are written:
+
+```php
+$package->addPart('/word/embed/blob.bin', 'application/octet-stream', $bytes, compress: false);
+$part->setContents($bytes, compress: true);
+```
+
+`null`, the default, leaves the decision to the content type. The argument is
+accepted by `addPart()`, `addPartFromStream()`, `addPartFromPath()`,
+`writePart()`, `writePartFromStream()`, `writePartFromPath()` and the matching
+`setContents*()` methods of a part. It applies to parts the package writes; a
+part carried through unchanged from the package it was opened from keeps the
+compression method it already had.
+
 ```php
 $contents = $part->openStream();
 try {

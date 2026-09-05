@@ -18,12 +18,16 @@ interface PackageInterface
     /** @return \Traversable<PartInterface> */
     public function getParts(): \Traversable;
 
-    public function addPart(string $name, string $contentType, string $contents): PartInterface;
+    /**
+     * @param ?bool $compress Whether to deflate the part, overriding what its content
+     *                        type implies. Null leaves the decision to ContentCompression.
+     */
+    public function addPart(string $name, string $contentType, string $contents, ?bool $compress = null): PartInterface;
 
     /** @param resource $stream */
-    public function addPartFromStream(string $name, string $contentType, $stream): PartInterface;
+    public function addPartFromStream(string $name, string $contentType, $stream, ?bool $compress = null): PartInterface;
 
-    public function addPartFromPath(string $name, string $contentType, string $path): PartInterface;
+    public function addPartFromPath(string $name, string $contentType, string $path, ?bool $compress = null): PartInterface;
 
     /** Declare a content type for every part with this extension that has no override. */
     public function setDefaultContentType(string $extension, string $contentType): void;
