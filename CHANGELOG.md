@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-05
+
+### Added
+
+- `ContentCompression::store()` registers content types whose payload is already
+  a compressed stream, so a codec this library does not yet know about is
+  declared once at start-up instead of being special-cased at every call site.
+- `addPart()`, `addPartFromStream()`, `addPartFromPath()`, `writePart()`,
+  `writePartFromStream()`, `writePartFromPath()` and the `setContents*()` methods
+  of a part take a `$compress` argument that overrides what the content type
+  implies for that one part. `null`, the default, keeps the existing behaviour.
+  `PackageInterface` and `PartInterface` declare the argument, so an outside
+  implementation of either has to accept it.
+
 ### Changed
 
 - `[Content_Types].xml` and relationship parts are serialized as strings rather
@@ -24,18 +38,6 @@ All notable changes to this project will be documented in this file. The format 
   the package is `…presentationml.slide+xml`, and only the first is a ZIP.
   Everything else, including SVG, BMP, EMF, WMF, VML, OLE objects and any
   unrecognised type, is still deflated.
-
-### Added
-
-- `ContentCompression::store()` registers content types whose payload is already
-  a compressed stream, so a codec this library does not yet know about is
-  declared once at start-up instead of being special-cased at every call site.
-- `addPart()`, `addPartFromStream()`, `addPartFromPath()`, `writePart()`,
-  `writePartFromStream()`, `writePartFromPath()` and the `setContents*()` methods
-  of a part take a `$compress` argument that overrides what the content type
-  implies for that one part. `null`, the default, keeps the existing behaviour.
-  `PackageInterface` and `PartInterface` declare the argument, so an outside
-  implementation of either has to accept it.
 
 ### Fixed
 
@@ -288,7 +290,8 @@ All notable changes to this project will be documented in this file. The format 
 - Suspicious compression ratios are rejected before entry extraction.
 - Saving digitally signed packages is blocked until signature preservation is supported.
 
-[Unreleased]: https://github.com/dkulyk/openxml-package/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/dkulyk/openxml-package/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/dkulyk/openxml-package/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/dkulyk/openxml-package/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dkulyk/openxml-package/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dkulyk/openxml-package/compare/v0.6.0...v0.7.0
