@@ -25,6 +25,18 @@ All notable changes to this project will be documented in this file. The format 
   Everything else, including SVG, BMP, EMF, WMF, VML, OLE objects and any
   unrecognised type, is still deflated.
 
+### Added
+
+- `ContentCompression::store()` registers content types whose payload is already
+  a compressed stream, so a codec this library does not yet know about is
+  declared once at start-up instead of being special-cased at every call site.
+- `addPart()`, `addPartFromStream()`, `addPartFromPath()`, `writePart()`,
+  `writePartFromStream()`, `writePartFromPath()` and the `setContents*()` methods
+  of a part take a `$compress` argument that overrides what the content type
+  implies for that one part. `null`, the default, keeps the existing behaviour.
+  `PackageInterface` and `PartInterface` declare the argument, so an outside
+  implementation of either has to accept it.
+
 ### Fixed
 
 - `ContentTypes::toXml()` no longer sorts the collection's own arrays as a side

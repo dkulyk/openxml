@@ -12,7 +12,11 @@ interface PartInterface
 
     public function getContents(): string;
 
-    public function setContents(string $contents): void;
+    /**
+     * @param ?bool $compress Whether to deflate the part, overriding what its content
+     *                        type implies. Null leaves the decision to ContentCompression.
+     */
+    public function setContents(string $contents, ?bool $compress = null): void;
 
     /** @return resource A readable stream that keeps its backing storage alive until closed. */
     public function openStream();
@@ -29,9 +33,9 @@ interface PartInterface
     public function getLocalPath(): string;
 
     /** @param resource $stream */
-    public function setContentsFromStream($stream): void;
+    public function setContentsFromStream($stream, ?bool $compress = null): void;
 
-    public function setContentsFromPath(string $path): void;
+    public function setContentsFromPath(string $path, ?bool $compress = null): void;
 
     public function getRelationships(): Relationships;
 

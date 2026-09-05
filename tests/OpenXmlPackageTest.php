@@ -12,6 +12,7 @@ use DK\OpenXml\Exception\PartInUseException;
 use DK\OpenXml\Exception\PartNotFoundException;
 use DK\OpenXml\Exception\UnsupportedFileFormatException;
 use DK\OpenXml\OpenXmlPackage;
+use DK\OpenXml\Packaging\ContentCompression;
 use DK\OpenXml\Packaging\PartInterface;
 use DK\OpenXml\Packaging\RelationshipType;
 use DK\OpenXml\Security\PackageLimits;
@@ -1433,6 +1434,60 @@ final class OpenXmlPackageTest extends TestCase
         } finally {
             $archive->close();
         }
+    }
+
+    public function testCompressionCanBeForcedPerPart(): void
+    {
+        $package = OpenXmlPackage::create();
+        $contents = str_repeat('a', 4096);
+        // Both go against what their content type implies.
+        $package->addPart('/word/media/image1.jpeg', 'image/jpeg', $contents, compress: true);
+        $package->addPart('/word/embed/blob.bin', 'application/octet-stream', $contents, compress: false);
+        $package->addPart('/word/document.xml', 'application/xml', $contents);
+        $package->getPart('/word/document.xml')->setContents($contents, compress: false);
+        $package->saveAs($this->filename);
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'word/media/image1.jpeg'));
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/embed/blob.bin'));
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/document.xml'));
+        } finally {
+            $archive->close();
+        }
+
+        self::assertSame($contents, OpenXmlPackage::open($this->filename)->readPart('/word/embed/blob.bin'));
+    }
+
+    public function testRegisteredContentTypesAreStored(): void
+    {
+        $contents = str_repeat('a', 4096);
+        $package = OpenXmlPackage::create();
+        $package->addPart('/word/media/before.jxl', 'image/jxl', $contents);
+
+        ContentCompression::store('image/JXL');
+
+        try {
+            $package->addPart('/word/media/after.jxl', 'image/jxl; quality=90', $contents);
+            $package->saveAs($this->filename);
+        } finally {
+            ContentCompression::reset();
+        }
+
+        $archive = new \ZipArchive();
+        self::assertTrue($archive->open($this->filename) === true);
+
+        try {
+            // Registration applies from the moment the part is written, not retroactively.
+            self::assertSame(\ZipArchive::CM_DEFLATE, self::compressionMethod($archive, 'word/media/before.jxl'));
+            self::assertSame(\ZipArchive::CM_STORE, self::compressionMethod($archive, 'word/media/after.jxl'));
+        } finally {
+            $archive->close();
+        }
+
+        self::assertTrue(ContentCompression::compresses('image/jxl'), 'reset() forgot the registration');
     }
 
     public function testMovingAStoredPartKeepsItStored(): void
